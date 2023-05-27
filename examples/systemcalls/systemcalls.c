@@ -130,7 +130,20 @@ bool do_exec(int count, ...)
                 printf("Exit status %i\n", WEXITSTATUS(pidstatus));
                 return !WEXITSTATUS(pidstatus);
             }
-
+        // FIX THIS SECTION
+            if (WIFSIGNALED(pidstatus)) {
+                return false;
+            }
+            if (WIFSTOPPED(pidstatus)) {
+                return false;
+            }
+            if (WIFCONTINUED(pidstatus)) {
+                return false;
+            }
+            else {
+                printf("I guess WIFEXITED returned false");
+                return true;
+            }
         }
     }
     va_end(args);
@@ -225,7 +238,20 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
                 printf("Exit status %i\n", WEXITSTATUS(pidstatus));
                 return !WEXITSTATUS(pidstatus);
             }
-
+        // FIX THIS SECTION
+            if (WIFSIGNALED(pidstatus)) {
+                return false;
+            }
+            if (WIFSTOPPED(pidstatus)) {
+                return false;
+            }
+            if (WIFCONTINUED(pidstatus)) {
+                return false;
+            }
+            else {
+                printf("I guess WIFEXITED returned false");
+                return true;
+            }
         }
     }
     close(fd);
