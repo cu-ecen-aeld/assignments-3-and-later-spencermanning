@@ -81,6 +81,9 @@ bool do_exec(int count, ...)
     }
     printf("\n");
 
+    // Avoid duplicate printf()s
+    fflush(stdout);
+
     // Make a copy of the current process
     current_pid = fork();
 
@@ -183,6 +186,9 @@ bool do_exec_redirect(const char *outputfile, int count, ...)
     pid_t ended_child_pid = 0;
 
     int fd = open(outputfile, O_WRONLY|O_CREAT); // TODO Do I need a mode parameter?
+
+    // Avoid duplicate printf()s
+    fflush(stdout);
 
     current_pid = fork();
 
