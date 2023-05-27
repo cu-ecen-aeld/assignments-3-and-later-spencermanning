@@ -100,8 +100,8 @@ bool do_exec(int count, ...)
             // printf("Execv failed. Could be good %i\n", errno);
             syslog(LOG_ERR, "FAILEDDDD\n");
             perror("Execv failedded. Could be good for test.\n");
-            // exit(1);
-            return false;
+            exit(errno);
+            // return false;
         }
         else if (out == 2) {
             perror("Execv failed with 2\n");
