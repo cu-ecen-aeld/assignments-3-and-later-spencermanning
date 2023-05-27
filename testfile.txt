@@ -1,0 +1,2 @@
+home is $HOME
+spencervb
