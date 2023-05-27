@@ -129,22 +129,26 @@ bool do_exec(int count, ...)
         }
 
         if (current_pid == ended_child_pid) {
-            if (WIFEXITED(pidstatus) == true) {
+            if (WIFEXITED(pidstatus)) {
+                printf("Hit WIFEXTED?\n");
                 printf("Exit status %i\n", WEXITSTATUS(pidstatus));
-                return !WEXITSTATUS(pidstatus);
+                return WEXITSTATUS(pidstatus) == 0;
             }
         // FIX THIS SECTION
             if (WIFSIGNALED(pidstatus)) {
+                printf("Hit WIFSIGNALED?\n");
                 return false;
             }
             if (WIFSTOPPED(pidstatus)) {
+                printf("Hit WIFSTOPPED?\n");
                 return false;
             }
             if (WIFCONTINUED(pidstatus)) {
+                printf("Hit WIFCONTINUED?\n");
                 return false;
             }
             else {
-                printf("I guess WIFEXITED returned false");
+                printf("I guess WIFEXITED returned false\n");
                 return true;
             }
         }
