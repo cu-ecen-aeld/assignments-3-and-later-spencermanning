@@ -39,7 +39,7 @@ if [ ! -e ${OUTDIR}/linux-stable/arch/${ARCH}/boot/Image ]; then
     make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- mrproper # Clean the kernel build tree
     make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- defconfig # For the "vir" arm dev board
     make -j4 ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- all # build a kernel image for booting QEMU
-    make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- modules # build any kernel modules
+    # make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- modules # build any kernel modules
     make ARCH=arm64 CROSS_COMPILE=aarch64-none-linux-gnu- dtbs # build the devicetree
 fi
 
@@ -90,10 +90,12 @@ ${CROSS_COMPILE}readelf -a bin/busybox | grep "Shared library"
 # TODO: Add library dependencies to rootfs. Copy them over from sysroot
 export SYSROOT=$(${CROSS_COMPILE}gcc -print-sysroot)
 
-sudo    cp -aL "${SYSROOT}/lib/ld-linux-aarch64.so.1" "${OUTDIR}/rootfs/lib"
-sudo    cp -aL "${SYSROOT}/lib64/libm.so.6" "${OUTDIR}/rootfs/lib64"
-sudo    cp -aL "${SYSROOT}/lib64/libresolv.so.2" "${OUTDIR}/rootfs/lib64"
-sudo    cp -aL "${SYSROOT}/lib64/libc.so.6" "${OUTDIR}/rootfs/lib64"
+# sudo    cp -aL "${SYSROOT}/lib/ld-linux-aarch64.so.1" "${OUTDIR}/rootfs/lib"
+# sudo    cp -aL "${SYSROOT}/lib64/libm.so.6" "${OUTDIR}/rootfs/lib64"
+# sudo    cp -aL "${SYSROOT}/lib64/libresolv.so.2" "${OUTDIR}/rootfs/lib64"
+# sudo    cp -aL "${SYSROOT}/lib64/libc.so.6" "${OUTDIR}/rootfs/lib64"
+sudo cp -r $SYSROOT/lib64/* "${OUTDIR}/rootfs/lib64"
+sudo cp -r $SYSROOT/lib/* "${OUTDIR}/rootfs/lib"
 
 # Translation: Copy the sysroot's cross-compiler library dependencies into the new root file system
 # CC_ROOT=$("$CROSS_COMPILE"gcc -print-sysroot)
@@ -130,6 +132,7 @@ echo "Copy the finder related scripts to home on rootfs"
 mkdir "$OUTDIR"/rootfs/home/conf
 cp finder.sh finder-test.sh writer writer.sh writer.c writer.o autorun-qemu.sh "$OUTDIR"/rootfs/home
 cp conf/assignment.txt conf/username.txt "$OUTDIR"/rootfs/home/conf
+
 # TODO: Chown the root directory
 # Change the user and group owners to be root for all files in rootfs
 echo "Change user and group owners to be root"
