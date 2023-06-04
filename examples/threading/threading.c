@@ -79,11 +79,11 @@ bool start_thread_obtaining_mutex(pthread_t *thread, pthread_mutex_t *mutex,int 
     int thread_status = pthread_create(thread, &attr, threadfunc, (void*)thread_data_local);
 
     if (thread_status) {
-        DEBUG_LOG("---Thread created successfully!\n");
+        DEBUG_LOG("---Thread not created!\n");
         return false;
     }
     else {
-        DEBUG_LOG("---Thread not created!\n");
+        DEBUG_LOG("---Thread created successfully!\n");
         return true;
     }
 }
