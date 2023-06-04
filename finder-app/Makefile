@@ -17,4 +17,4 @@ writer:
 
 clean :
 	$(info The main directory is $(BUILD_DIR))
-	rm $(BUILD_DIR)/writer.o writer
+	rm -rf $(BUILD_DIR)/writer.o writer
