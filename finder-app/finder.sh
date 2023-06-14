@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # Finder.sh script to find stuff
 # Author: Spencer Manning
 
