@@ -75,24 +75,7 @@ int main (int argc, char *argv[]) {
     syslog(LOG_DEBUG, "Start aesdsocket.c\n");
     printf("We have started the aesdsocket\n");
 
-    syslog(LOG_ERR, "Anotherlog");
-
-    // 5. Modify your program to support a -d argument which runs the aesdsocket application as a daemon. When in daemon mode the program should fork after ensuring it can bind to port 9000.
-    if (argc == 2) {
-        syslog(LOG_ERR, "Start daemon\n");
-        // TODO: Fill in the daemon here
-
-        if (memcmp(argv[1], "-d", 1)) { // should this be argv[0]??
-            int pid = fork();
-            if (pid == -1) {
-                exit(-1);
-            }
-            // Create the new session
-            setsid();
-            // Change working directory to "/"
-            chdir("/");
-        }
-    }
+    syslog(LOG_NOTICE, "Anotherlog");
 
     // Set up new_action that points to the signal_handler function (vid3.10)
     struct sigaction new_action;
@@ -170,6 +153,33 @@ int main (int argc, char *argv[]) {
         int acceptfd = accept(sockfd, (struct sockaddr*)&clientinfo, &client_addr_size); // TODO: Should servinfo->ai_addr be socklen_t socklen instead?
         if (acceptfd == -1) {
             exit(-1); // or return -1;?
+        }
+
+        // 5. Modify your program to support a -d argument which runs the aesdsocket application as a daemon.
+        // When in daemon mode the program should fork after ensuring it can bind to port 9000.
+        if (argc == 2) {
+            syslog(LOG_ERR, "Start daemon\n");
+            // TODO: Fill in the daemon here
+
+            if (strcmp(argv[1], "-d") == 0) {
+                syslog(LOG_NOTICE, "About to fork the process");
+                int pid = fork();
+                if (pid == -1) {
+                    syslog(LOG_ERR, "Fork failed");
+                    exit(-1);
+                }
+                else if (pid > 0) { // parent
+                    syslog(LOG_NOTICE, "In parent, exiting now");
+                    closelog();
+                    exit(0);
+                }
+                // Create the new session for the child process.
+                // ie put it in the background as a daemon!
+                setsid();
+
+                // Change working directory to "/"
+                chdir("/"); // Do we need this?
+            }
         }
         
         // d. Logs message to the syslog “Accepted connection from xxx” where XXXX is the IP address of the connected client.
