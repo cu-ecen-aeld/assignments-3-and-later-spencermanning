@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+      {
+        "label": "build firmware",
+        "type": "shell",
+        "command": "make clean; make -j8 all",
+        "group": {
+          "kind": "build",
+          "isDefault": true,
+        },
+        "problemMatcher": "$gcc",
+        "options": {
+            "cwd": "${workspaceRoot}/server"
+        }
+      }
+    ],
+    "isBuildCommand": true
+  }

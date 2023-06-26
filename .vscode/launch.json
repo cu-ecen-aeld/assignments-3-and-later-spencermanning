@@ -1,5 +1,37 @@
 {
-    "configurations": [
+    "configurations": [       
+        {
+            "name": "(gdb) aesdsocket",
+            "type": "cppdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/server/aesdsocket",
+            "args": [],
+            "stopAtEntry": false,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "externalConsole": false,
+            "MIMode": "gdb",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set Disassembly Flavor to Intel",
+                    "text": "-gdb-set disassembly-flavor intel",
+                    "ignoreFailures": true
+                }
+            ],
+        },
+        {
+            "type": "bashdb",
+            "request": "launch",
+            "name": "sockettest.sh",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}/assignment-autotest/test/assignment5/sockettest.sh",
+            "args": [],
+        },
         {
             "type": "bashdb",
             "request": "launch",
@@ -8,8 +40,9 @@
             // "program": "finder-app/finder.sh",
             "program": "${command:SelectScriptName}",
             // "args": ["conf", "spencer"] // For finder.sh
-            "args": ["~/assignment-1-spencermanning/finder-app/check/test.txt", "asdf"] // For writer.sh
-        }, 
+            // "args": ["~/assignment-1-spencermanning/finder-app/check/test.txt", "asdf"] // For writer.sh
+            // "args": [""] // For manual-linux.sh
+        },
         // {
         //     "type": "bashdb",
         //     "request": "launch",
