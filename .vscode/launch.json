@@ -5,7 +5,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/server/aesdsocket",
-            "args": [],
+            "args": [], // Use "-d" to run as a daemon in the background
             "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],

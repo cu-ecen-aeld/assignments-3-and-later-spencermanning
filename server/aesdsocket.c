@@ -88,7 +88,7 @@ int main (int argc, char *argv[]) {
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (sockfd == -1) {
         syslog(LOG_ERR, "Socket connection failed\n");
-        exit(-1); // or 1?    
+        return -1; 
     }
 
     // Get the socket address (sockaddr)
@@ -101,7 +101,7 @@ int main (int argc, char *argv[]) {
     
     int getaddrinfoout = getaddrinfo(NULL, "9000", &hints, &servinfo);
     if (getaddrinfoout == -1) {
-        exit(-1); // or return -1?
+        return -1;
     }
 
     // socklen_t addrlen = sizeof(servinfo->ai_addrlen);
@@ -110,13 +110,12 @@ int main (int argc, char *argv[]) {
     int myoptval = 1;
     int sockoptout = setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &myoptval, sizeof(myoptval));
     if (sockoptout == -1) {
-        exit(-1);
+        return -1;
     }
 
     int bindout  = bind(sockfd, servinfo->ai_addr, servinfo->ai_addrlen);
     if (bindout == -1) {
-        // return -1;
-        exit(-1); // or return -1;?
+        return -1;
     }
     
     // FIXME: Does the daemon creation need to be placed here?
@@ -126,7 +125,7 @@ int main (int argc, char *argv[]) {
     // socklen_t addrlen = sizeof(addrinfo.ai_addr); // Should it be this way?
     int listenout = listen(sockfd, 20); // 20 from TA
     if (listenout == -1) {
-        exit(-1); // or return -1;?
+        return -1;
     }
 
     struct sockaddr_in clientinfo;
@@ -152,7 +151,7 @@ int main (int argc, char *argv[]) {
 
         int acceptfd = accept(sockfd, (struct sockaddr*)&clientinfo, &client_addr_size); // TODO: Should servinfo->ai_addr be socklen_t socklen instead?
         if (acceptfd == -1) {
-            exit(-1); // or return -1;?
+            return -1;
         }
 
         // 5. Modify your program to support a -d argument which runs the aesdsocket application as a daemon.
@@ -166,7 +165,7 @@ int main (int argc, char *argv[]) {
                 int pid = fork();
                 if (pid == -1) {
                     syslog(LOG_ERR, "Fork failed");
-                    exit(-1);
+                    return -1;
                 }
                 else if (pid > 0) { // parent
                     syslog(LOG_NOTICE, "In parent, exiting now");
