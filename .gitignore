@@ -5,3 +5,6 @@ build/
 crosstool-ng
 aesd-build
 test.sh.log
+aesdsocket
+server/aesdsocket
+server/valgrind-out.txt
