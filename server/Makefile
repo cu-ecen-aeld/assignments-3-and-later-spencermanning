@@ -13,7 +13,7 @@ aesdsocket.o : aesdsocket.c
 	$(CC) -c -o aesdsocket.o aesdsocket.c
 
 aesdsocket : aesdsocket.o
-	$(CC) aesdsocket.o -o aesdsocket
+	$(CC) aesdsocket.o -o aesdsocket -lpthread
 	@echo "------- Successfully built --------"
 
 clean :

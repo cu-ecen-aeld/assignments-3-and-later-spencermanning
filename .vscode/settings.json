@@ -3,6 +3,7 @@
         "systemcalls.h": "c",
         "unistd.h": "c",
         "stdlib.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "pthread.h": "c"
     }
 }
