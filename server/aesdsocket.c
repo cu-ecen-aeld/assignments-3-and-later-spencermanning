@@ -97,13 +97,13 @@ void* timer_thread(void * arg) {
 
     time_t rawtime;
     struct tm *timeinfo;
-    time(&rawtime);
     char timestamp[31];
 
     while (1) {
         // Sleep first for 10 seconds to avoid interrupting initial connections
         sleep(10);
 
+        time(&rawtime);
         timeinfo = localtime(&rawtime);
         strftime(timestamp, sizeof(timestamp), "timestamp:%Y-%m-%d %H:%M:%S\n", timeinfo);
         
@@ -163,7 +163,7 @@ void* connection_thread(void * arg) {
     packets sent will be less than the size of the available RAM for the process heap.
     */
 
-    char readbuf1byte = 0;
+    char readbuf1byte[30] = {0}; // the sockettest.sh for asy6.1 works better with this as 30 chars
     ssize_t num_read;
     int fseekerr = fseek(conn_args->file, 0, SEEK_SET);
     if (fseekerr) {
@@ -212,6 +212,9 @@ int main (int argc, char *argv[]) {
             chdir("/"); // Do we need this?
         }
     }
+
+    // Start with a clean file
+    remove("/var/tmp/aesdsocketdata");
 
     FILE *file;
     file = fopen("/var/tmp/aesdsocketdata", "a+");
@@ -277,10 +280,13 @@ int main (int argc, char *argv[]) {
     // struct sockaddr_in clientinfo;
     socklen_t client_addr_size = sizeof(clientinfo);
 
-    // Start with a clean file
-    remove("/var/tmp/aesdsocketdata");
-
     pthread_mutex_init(&mutex, NULL);
+
+    pthread_t timer_thread_id;
+    if (pthread_create(&timer_thread_id, NULL, timer_thread, (void *)file) != 0) {
+        syslog(LOG_ERR, "Timer thread creation failed");
+        return 1;
+    }
 
     // Initialize the head of the linked list
     struct Node *myNode = NULL;

@@ -1,5 +1,5 @@
 {
-    "configurations": [       
+    "configurations": [
         {
             "name": "(gdb) aesdsocket",
             "type": "cppdbg",
@@ -43,13 +43,5 @@
             // "args": ["~/assignment-1-spencermanning/finder-app/check/test.txt", "asdf"] // For writer.sh
             // "args": [""] // For manual-linux.sh
         },
-        // {
-        //     "type": "bashdb",
-        //     "request": "launch",
-        //     "name": "Bash simple",
-        //     "cwd": "${workspaceFolder}",
-        //     "program": "${file}",
-        //     "terminalKind": "integrated"
-        // }
     ]
 }
