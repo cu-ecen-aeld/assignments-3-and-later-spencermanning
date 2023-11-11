@@ -107,8 +107,8 @@ void* timer_thread(void * arg) {
         timeinfo = localtime(&rawtime);
         strftime(timestamp, sizeof(timestamp), "timestamp:%Y-%m-%d %H:%M:%S\n", timeinfo);
         
-        pthread_mutex_lock(&mutex);
         fwrite(&timestamp, sizeof(char), 31, argfile);
+        pthread_mutex_lock(&mutex);
         fflush(argfile); // push the data to the file
         pthread_mutex_unlock(&mutex);
     }
@@ -136,7 +136,6 @@ void* connection_thread(void * arg) {
     memcpy(&newlinechar, "\n", 1);
     ssize_t recvbyte;
 
-    pthread_mutex_lock(&mutex);
     do
     {
         recvbyte = recv(conn_args->acceptfd, &sockbuf1byte, 1, 0); // if doesn't work, try read()
@@ -148,12 +147,14 @@ void* connection_thread(void * arg) {
             syslog(LOG_ERR, "Write to file failed.");
             closeThread(conn_args);
         }
-
+        else {
+            printf("%c",sockbuf1byte);
+        }
     } while (memcmp(&sockbuf1byte, &newlinechar, 1) != 0);
 
-    // Write to /var/tmp/aesdsocketdata
+    // Write to /var/tmp/aesdsocketdata under protection of the mutex
+    pthread_mutex_lock(&mutex);
     fflush(conn_args->file); // fwrite needs to be flushed after it's called
-    
     pthread_mutex_unlock(&mutex); // Don't put mutex functions in do-while loops
 
     // 5f. Returns the full content of /var/tmp/aesdsocketdata to the client as soon as the received data packet completes.
