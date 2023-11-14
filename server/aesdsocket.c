@@ -18,8 +18,6 @@
 #include <pthread.h>
 #include <time.h>
 #include <stdbool.h>
-#include <sys/select.h> // for select()
-// #include <sys/time.h> // not needed because it's above
 
 // const struct {
 //     sa_family_t sa_family;
@@ -73,6 +71,7 @@ struct Node {
     pthread_t thread_id;
     bool is_complete;
     SLIST_ENTRY(Node) entries;
+    struct Node *next;
 };
 
 struct threadArgs {
@@ -85,9 +84,7 @@ struct threadArgs {
 pthread_mutex_t mutex;
 
 void closeThread(struct threadArgs *args, int caller_line) {
-    // Closing the accept file descriptor apparently causes a "Bad file descriptor for other threads"
-    // printf("Closing acceptfd %i. Caused by line %d\n", args->acceptfd, caller_line);
-    // close(args->acceptfd);
+    // NOTE: Closing the accept file descriptor apparently causes a "Bad file descriptor for other threads"
 
     // 5g. Logs message to the syslog “Closed connection from XXX” where XXX is the IP address of the connected client.
     syslog(LOG_NOTICE, "Closed connection from %s\n", args->ipaddr);
@@ -95,10 +92,6 @@ void closeThread(struct threadArgs *args, int caller_line) {
     // Set a global boolean to signal the end of the thread
     args->thread_node->is_complete = true;
 
-    // free(args->acceptfd);
-    // free(args->file);
-    // free(args->ipaddr);
-    // free(args->thread_node);
     free(args);
     args = NULL; // to prevent further use of args
 
@@ -318,43 +311,8 @@ int main (int argc, char *argv[]) {
     SLIST_HEAD(ListHead, Node) head = SLIST_HEAD_INITIALIZER(head);
     SLIST_INIT(&head);
 
-    // fd_set readfds;
-    // struct timeval tv;
-    // int retval;
-
     // 5h. Restarts accepting connections from new clients forever in a loop until SIGINT or SIGTERM is received (see below).
     while (received_exit_signal == 0) {
-
-        // while (1) {
-        //     FD_ZERO(&readfds);
-        //     FD_SET(sockfd, &readfds);
-        //     tv.tv_sec = 1;
-        //     tv.tv_usec = 0;
-
-        //     // Use select() to wait for an accepted connection because it gives me a timeout,
-        //     // unlike accept() (below) which doesn't have a timeout.
-        //     retval = select(sockfd + 1, &readfds, NULL, NULL, &tv);
-        //     if (retval == -1) {
-        //         printf("Select failed.\n");
-        //         continue;
-        //     }
-        //     else if (retval == 0) { // timeout and restart loop
-        //         if (received_exit_signal == 0) {
-        //             SLIST_FOREACH(myNode, &head, entries) {
-        //                 if (myNode->is_complete) {
-        //                     pthread_join(myNode->thread_id, NULL);
-        //                 }
-        //             }
-        //         }
-        //     }
-        //     else { // continue on to accept()
-        //         break;
-        //     }
-        // }
-        
-        // if (!FD_ISSET(sockfd, &readfds)) {
-        //     syslog(LOG_ERR, "FD_ISSET returned with something other than readfds");
-        // }
 
         int acceptfd = accept(sockfd, (struct sockaddr*)&clientinfo, &client_addr_size);
         if (acceptfd == -1) {
@@ -418,10 +376,18 @@ int main (int argc, char *argv[]) {
     // TODO: free the list of args here
     // free(args);
 
-    SLIST_FOREACH(myNode, &head, entries) {
+    struct Node *current_node = SLIST_FIRST(&head);
+    struct Node *next_node;
+
+    // Free all nodes in linked list
+    while (current_node != NULL) {
+        next_node = current_node->next; // Save the next node
+        // Remove the element, then free it after. This fixes a myNode Valgrind issue.
         SLIST_REMOVE(&head, myNode, Node, entries);
-        // free(myNode);
-        // myNode = NULL; // to prevent further use of myNode
+
+        // Free any dynamically allocated members of current_node here
+        free(current_node); // Free the current node
+        current_node = next_node; // Move to the next node
     }
 
     /* 5i. Gracefully exits when SIGINT or SIGTERM is received, 
