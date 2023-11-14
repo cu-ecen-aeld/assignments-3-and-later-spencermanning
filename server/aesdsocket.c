@@ -18,6 +18,8 @@
 #include <pthread.h>
 #include <time.h>
 #include <stdbool.h>
+#include <sys/select.h> // for select()
+// #include <sys/time.h> // not needed because it's above
 
 // const struct {
 //     sa_family_t sa_family;
@@ -44,23 +46,26 @@ void close_all_things() {
     shutdown(sockfd,SHUT_RDWR);
     close(sockfd);
     freeaddrinfo(servinfo); // Free the malloc'd space from getaddrinfo()
+    servinfo = NULL; // to prevent further use of servinfo
 }
 
 static void signal_handler(int signal_num) {
+    // Tell the other threads to start closing
+    received_exit_signal = 1;
+
     /* Logs message to the syslog “Caught signal, exiting” when SIGINT or SIGTERM is received. */
     syslog(LOG_ERR, "Caught signal, exiting\n");
     
     if (signal_num == SIGINT) { // ctrl+c
         printf("***We got a SIGINT***\n");
-        close_all_things();
-        received_exit_signal = 1;
-        
     }
     else if (signal_num == SIGTERM) {
         printf("***We got a SIGTERM***\n");
-        close_all_things();
-        received_exit_signal = 1;
     }
+
+    printf("Wait 2 seconds for threads to close.\n");
+    sleep(2);
+    close_all_things();
 }
 
 // the recursive "entries" member is necessary to use the linked lists from sys/queue.h
@@ -79,8 +84,10 @@ struct threadArgs {
 
 pthread_mutex_t mutex;
 
-void closeThread(struct threadArgs *args) {
-    close(args->acceptfd);
+void closeThread(struct threadArgs *args, int caller_line) {
+    // Closing the accept file descriptor apparently causes a "Bad file descriptor for other threads"
+    // printf("Closing acceptfd %i. Caused by line %d\n", args->acceptfd, caller_line);
+    // close(args->acceptfd);
 
     // 5g. Logs message to the syslog “Closed connection from XXX” where XXX is the IP address of the connected client.
     syslog(LOG_NOTICE, "Closed connection from %s\n", args->ipaddr);
@@ -88,31 +95,47 @@ void closeThread(struct threadArgs *args) {
     // Set a global boolean to signal the end of the thread
     args->thread_node->is_complete = true;
 
+    // free(args->acceptfd);
+    // free(args->file);
+    // free(args->ipaddr);
+    // free(args->thread_node);
+    free(args);
+    args = NULL; // to prevent further use of args
+
     pthread_exit(NULL);
 }
 
 void* timer_thread(void * arg) {
-    // Same aesdsocketdata file always
-    FILE *argfile = (FILE *)arg;
+    // Same aesdsocketdata file always.
+    // Needs to dereference the pointer that is passed in.
+    FILE **argfile = (FILE **)arg;
+    FILE* file = *argfile;
 
     time_t rawtime;
     struct tm *timeinfo;
-    char timestamp[31];
+    char timestamp[30] ={0};
 
-    while (1) {
-        // Sleep first for 10 seconds to avoid interrupting initial connections
-        sleep(10);
+    // Wait for 5 seconds to allow the other tests to finish before adding timestamps to the output file.
+    sleep(5);
+
+    while (received_exit_signal == 0) {
+        // Check every second for an exit signal
+        for (int sec = 0; sec < 9; sec++) {
+            if (received_exit_signal == 0) {sleep(1);}
+            else {break;}
+        }
 
         time(&rawtime);
         timeinfo = localtime(&rawtime);
         strftime(timestamp, sizeof(timestamp), "timestamp:%Y-%m-%d %H:%M:%S\n", timeinfo);
         
-        fwrite(&timestamp, sizeof(char), 31, argfile);
+        fwrite(&timestamp, sizeof(char), 30, file);
         pthread_mutex_lock(&mutex);
-        fflush(argfile); // push the data to the file
+        fflush(file); // push the data to the file
         pthread_mutex_unlock(&mutex);
     }
-    // should never get here
+
+    // DON'T free the file here!
     pthread_exit(NULL);
 }
 
@@ -136,24 +159,25 @@ void* connection_thread(void * arg) {
     memcpy(&newlinechar, "\n", 1);
     ssize_t recvbyte;
 
+    // Write to /var/tmp/aesdsocketdata under protection of the mutex
+    pthread_mutex_lock(&mutex);
     do
     {
         recvbyte = recv(conn_args->acceptfd, &sockbuf1byte, 1, 0); // if doesn't work, try read()
         if (recvbyte == 0 || recvbyte == -1) {
             syslog(LOG_ERR, "Socket recv() received an error: %i\n", (int)recvbyte);
-            closeThread(conn_args);
+            perror("Recv Error");
+            closeThread(conn_args, __LINE__);
         }
         if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
             syslog(LOG_ERR, "Write to file failed.");
-            closeThread(conn_args);
+            closeThread(conn_args, __LINE__);
         }
         else {
             printf("%c",sockbuf1byte);
         }
     } while (memcmp(&sockbuf1byte, &newlinechar, 1) != 0);
 
-    // Write to /var/tmp/aesdsocketdata under protection of the mutex
-    pthread_mutex_lock(&mutex);
     fflush(conn_args->file); // fwrite needs to be flushed after it's called
     pthread_mutex_unlock(&mutex); // Don't put mutex functions in do-while loops
 
@@ -177,11 +201,11 @@ void* connection_thread(void * arg) {
         }
         if (send(conn_args->acceptfd, &readbuf1byte, 1, 0) == -1) {
             syslog(LOG_ERR, "Send failed");
-            closeThread(conn_args);
+            closeThread(conn_args, __LINE__);
         }
     } while (num_read > 0);
 
-    closeThread(conn_args);
+    closeThread(conn_args, __LINE__);
 
     return NULL; // will not get here.
 }
@@ -230,7 +254,7 @@ int main (int argc, char *argv[]) {
     syslog(LOG_DEBUG, "Start aesdsocket.c\n");
     printf("We have started the aesdsocket\n");
 
-    syslog(LOG_NOTICE, "Anotherlog");
+    syslog(LOG_NOTICE, "-------- New log --------");
 
     // Set up new_action that points to the signal_handler function (vid3.10)
     struct sigaction new_action;
@@ -284,7 +308,7 @@ int main (int argc, char *argv[]) {
     pthread_mutex_init(&mutex, NULL);
 
     pthread_t timer_thread_id;
-    if (pthread_create(&timer_thread_id, NULL, timer_thread, (void *)file) != 0) {
+    if (pthread_create(&timer_thread_id, NULL, timer_thread, &file) != 0) {
         syslog(LOG_ERR, "Timer thread creation failed");
         return 1;
     }
@@ -294,15 +318,60 @@ int main (int argc, char *argv[]) {
     SLIST_HEAD(ListHead, Node) head = SLIST_HEAD_INITIALIZER(head);
     SLIST_INIT(&head);
 
+    // fd_set readfds;
+    // struct timeval tv;
+    // int retval;
+
     // 5h. Restarts accepting connections from new clients forever in a loop until SIGINT or SIGTERM is received (see below).
     while (received_exit_signal == 0) {
 
-        char ipaddr[INET_ADDRSTRLEN]; // IPv4 or IPv6??
+        // while (1) {
+        //     FD_ZERO(&readfds);
+        //     FD_SET(sockfd, &readfds);
+        //     tv.tv_sec = 1;
+        //     tv.tv_usec = 0;
+
+        //     // Use select() to wait for an accepted connection because it gives me a timeout,
+        //     // unlike accept() (below) which doesn't have a timeout.
+        //     retval = select(sockfd + 1, &readfds, NULL, NULL, &tv);
+        //     if (retval == -1) {
+        //         printf("Select failed.\n");
+        //         continue;
+        //     }
+        //     else if (retval == 0) { // timeout and restart loop
+        //         if (received_exit_signal == 0) {
+        //             SLIST_FOREACH(myNode, &head, entries) {
+        //                 if (myNode->is_complete) {
+        //                     pthread_join(myNode->thread_id, NULL);
+        //                 }
+        //             }
+        //         }
+        //     }
+        //     else { // continue on to accept()
+        //         break;
+        //     }
+        // }
+        
+        // if (!FD_ISSET(sockfd, &readfds)) {
+        //     syslog(LOG_ERR, "FD_ISSET returned with something other than readfds");
+        // }
 
         int acceptfd = accept(sockfd, (struct sockaddr*)&clientinfo, &client_addr_size);
         if (acceptfd == -1) {
+            printf("Failed in attempt to accept client connection\n");
+
+            SLIST_FOREACH(myNode, &head, entries) {
+                if (myNode->is_complete) {
+                    pthread_join(myNode->thread_id, NULL);
+                    syslog(LOG_ERR, "Thread %li joined.", myNode->thread_id);
+                }
+            }
             continue;
         }
+
+        char ipaddr[INET_ADDRSTRLEN]; // IPv4 or IPv6??
+
+        // printf("----Sockfd: %i, Acceptfd: %i\n", sockfd, acceptfd);
 
         // Set up client ip address info
         if (clientinfo.ss_family == AF_INET) {
@@ -318,17 +387,21 @@ int main (int argc, char *argv[]) {
         syslog(LOG_NOTICE, "Accepted connection from %s\n", ipaddr);
 
         // malloc memory for each node created. Will be freed with SLIST_REMOVE()
-        myNode = (struct Node *)malloc(sizeof(myNode));
+        myNode = (struct Node *)malloc(sizeof(struct Node));
         myNode->is_complete = false;
+        myNode->thread_id = 0;
 
-        // Set up the args to pass in
-        struct threadArgs args;
-        strncpy(args.ipaddr, ipaddr, INET_ADDRSTRLEN);
-        args.acceptfd = acceptfd;
-        args.file = file;
-        args.thread_node = myNode;
+        // Set up and malloc the args to pass in to the thread. 
+        struct threadArgs *args;
+        args = (struct threadArgs *)malloc(sizeof(struct threadArgs));
 
-        if (pthread_create(&myNode->thread_id, NULL, connection_thread, (void *)&args) != 0) {
+        // Fill in the args with the current context
+        strncpy(args->ipaddr, ipaddr, INET_ADDRSTRLEN);
+        args->acceptfd = acceptfd;
+        args->file = file;
+        args->thread_node = myNode;
+
+        if (pthread_create(&myNode->thread_id, NULL, connection_thread, args) != 0) {
             syslog(LOG_ERR, "Thread creation failed");
             return 1;
         }
@@ -338,10 +411,17 @@ int main (int argc, char *argv[]) {
         SLIST_FOREACH(myNode, &head, entries) {
             if (myNode->is_complete) {
                 pthread_join(myNode->thread_id, NULL);
-                SLIST_REMOVE(&head, myNode, Node, entries);
-                free(myNode);
             }
         }
+    }
+
+    // TODO: free the list of args here
+    // free(args);
+
+    SLIST_FOREACH(myNode, &head, entries) {
+        SLIST_REMOVE(&head, myNode, Node, entries);
+        // free(myNode);
+        // myNode = NULL; // to prevent further use of myNode
     }
 
     /* 5i. Gracefully exits when SIGINT or SIGTERM is received, 
@@ -351,6 +431,7 @@ int main (int argc, char *argv[]) {
     */
     printf("Caught signal, exiting\n");
     fclose(file);
+    free(myNode);
     close_all_things();
 
     return 0; // no errors
