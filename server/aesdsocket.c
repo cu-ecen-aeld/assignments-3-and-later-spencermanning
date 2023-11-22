@@ -113,7 +113,7 @@ void* timer_thread(void * arg) {
 
     while (received_exit_signal == 0) {
         // Check every second for an exit signal
-        for (int sec = 0; sec < 9; sec++) {
+        for (int sec = 0; sec < 10; sec++) {
             if (received_exit_signal == 0) {sleep(1);}
             else {break;}
         }
