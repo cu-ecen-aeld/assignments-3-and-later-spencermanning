@@ -172,7 +172,6 @@ void* connection_thread(void * arg) {
     } while (memcmp(&sockbuf1byte, &newlinechar, 1) != 0);
 
     fflush(conn_args->file); // fwrite needs to be flushed after it's called
-    pthread_mutex_unlock(&mutex); // Don't put mutex functions in do-while loops
 
     // 5f. Returns the full content of /var/tmp/aesdsocketdata to the client as soon as the received data packet completes.
     /* You may assume the total size of all packets sent 
@@ -197,6 +196,7 @@ void* connection_thread(void * arg) {
             closeThread(conn_args, __LINE__);
         }
     } while (num_read > 0);
+    pthread_mutex_unlock(&mutex); // Don't put mutex functions in do-while loops
 
     closeThread(conn_args, __LINE__);
 
