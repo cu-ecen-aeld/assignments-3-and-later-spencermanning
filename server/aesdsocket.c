@@ -120,7 +120,7 @@ void* timer_thread(void * arg) {
 
         time(&rawtime);
         timeinfo = localtime(&rawtime);
-        strftime(timestamp, sizeof(timestamp), "timestamp:%Y-%m-%d %H:%M:%S\n", timeinfo);
+        strftime(timestamp, sizeof(timestamp), "Timestamp:%Y-%m-%d %H:%M:%S\n", timeinfo);
         
         fwrite(&timestamp, sizeof(char), 30, file);
         pthread_mutex_lock(&mutex);
