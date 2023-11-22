@@ -311,6 +311,8 @@ int main (int argc, char *argv[]) {
     SLIST_HEAD(ListHead, Node) head = SLIST_HEAD_INITIALIZER(head);
     SLIST_INIT(&head);
 
+    int firsttime = 1;
+
     // 5h. Restarts accepting connections from new clients forever in a loop until SIGINT or SIGTERM is received (see below).
     while (received_exit_signal == 0) {
 
@@ -325,6 +327,17 @@ int main (int argc, char *argv[]) {
                 }
             }
             continue;
+        }
+
+        if (firsttime) {
+            printf("----------Freopening file\n");
+            freopen("/var/tmp/aesdsocketdata", "w+", file);
+            if (!file) {
+                syslog(LOG_ERR, "File didn't freopen\n");
+                printf("File didn't freopen\n");
+                exit(1);
+            }
+            firsttime = 0;
         }
 
         char ipaddr[INET_ADDRSTRLEN]; // IPv4 or IPv6??
