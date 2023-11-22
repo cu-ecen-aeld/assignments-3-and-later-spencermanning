@@ -328,9 +328,10 @@ int main (int argc, char *argv[]) {
             }
             continue;
         }
+        printf("--- Connection Accepted. Timer can start now.\n");
 
         if (firsttime) {
-            printf("----------Freopening file\n");
+            printf("Freopening file\n");
             freopen("/var/tmp/aesdsocketdata", "w+", file);
             if (!file) {
                 syslog(LOG_ERR, "File didn't freopen\n");
