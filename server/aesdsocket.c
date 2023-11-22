@@ -82,6 +82,7 @@ struct threadArgs {
 };
 
 pthread_mutex_t mutex;
+pthread_mutex_t timer_pause_mutex;
 
 void closeThread(struct threadArgs *args, int caller_line) {
     // NOTE: Closing the accept file descriptor apparently causes a "Bad file descriptor for other threads"
@@ -108,6 +109,8 @@ void* timer_thread(void * arg) {
     struct tm *timeinfo;
     char timestamp[30] ={0};
 
+    pthread_mutex_lock(&timer_pause_mutex);
+
     // Wait for 5 seconds to allow the other tests to finish before adding timestamps to the output file.
     sleep(5);
 
@@ -127,6 +130,8 @@ void* timer_thread(void * arg) {
         fflush(file); // push the data to the file
         pthread_mutex_unlock(&mutex);
     }
+
+    pthread_mutex_unlock(&timer_pause_mutex);
 
     // DON'T free the file here!
     pthread_exit(NULL);
@@ -299,12 +304,16 @@ int main (int argc, char *argv[]) {
     socklen_t client_addr_size = sizeof(clientinfo);
 
     pthread_mutex_init(&mutex, NULL);
+    pthread_mutex_init(&timer_pause_mutex, NULL);
 
     pthread_t timer_thread_id;
     if (pthread_create(&timer_thread_id, NULL, timer_thread, &file) != 0) {
         syslog(LOG_ERR, "Timer thread creation failed");
         return 1;
     }
+
+    // Prevent the timer thread from running until a connection is accepted.
+    pthread_mutex_lock(&timer_pause_mutex);
 
     // Initialize the head of the linked list
     struct Node *myNode = NULL;
@@ -331,6 +340,9 @@ int main (int argc, char *argv[]) {
         printf("--- Connection Accepted. Timer can start now.\n");
 
         if (firsttime) {
+            // Allow timer thread to start
+            pthread_mutex_unlock(&timer_pause_mutex);
+
             printf("Freopening file\n");
             freopen("/var/tmp/aesdsocketdata", "w+", file);
             if (!file) {
