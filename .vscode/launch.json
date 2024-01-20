@@ -1,6 +1,16 @@
 {
     "configurations": [
         {
+            "type": "bashdb",
+            "request": "launch",
+            "name": "./full-test.sh",
+            "cwd": "${workspaceFolder}",
+            // "program": "${workspaceFolder}/full-test.sh",
+            "program": "${workspaceFolder}/unit-test.sh",
+            "args": [],
+            "pathBashdb": "/usr/bin/bashdb" // to allow to debug into sub-scripts within unit-test.sh for asy7.1
+        },
+        {
             "name": "(gdb) aesdsocket",
             "type": "cppdbg",
             "request": "launch",

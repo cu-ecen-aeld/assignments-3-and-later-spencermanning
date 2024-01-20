@@ -6,6 +6,7 @@
         "stdio.h": "c",
         "pthread.h": "c",
         "queue.h": "c",
-        "time.h": "c"
+        "time.h": "c",
+        "string.h": "c"
     }
 }

@@ -11,7 +11,8 @@
         },
         "problemMatcher": "$gcc",
         "options": {
-            "cwd": "${workspaceRoot}/server"
+            // "cwd": "${workspaceRoot}/server"
+            "cwd": "${workspaceRoot}/aesd-char-driver" // for assignment 7.1
         }
       }
     ],
