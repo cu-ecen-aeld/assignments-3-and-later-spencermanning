@@ -6,7 +6,7 @@ CFLAGS ?= -g -Wall -Werror
 CC ?= $(CROSS_COMPILE)gcc $(CFLAGS)
 SOURCES = aesd-circular-buffer.c
 OBJECTS = $(SOURCES:.c=.o)
-LIBRARY = libmylibrary.a
+LIBRARY = asy7_1_staticLibraryBuild.a
 
 all: $(LIBRARY)
 
