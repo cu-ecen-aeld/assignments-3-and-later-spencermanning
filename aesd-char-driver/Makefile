@@ -1,20 +1,30 @@
-# Use this makefile to just build the library (.a) file for aesd-circular-buffer
-# to confirm that it builds successfully. 
-# NOTE: I don't think this will be used for the actual assignment
+# See example Makefile from scull project
+# Comment/uncomment the following line to disable/enable debugging
+#DEBUG = y
 
-CFLAGS ?= -g -Wall -Werror
-CC ?= $(CROSS_COMPILE)gcc $(CFLAGS)
-SOURCES = aesd-circular-buffer.c
-OBJECTS = $(SOURCES:.c=.o)
-LIBRARY = asy7_1_staticLibraryBuild.a
+# Add your debugging flag (or not) to CFLAGS
+ifeq ($(DEBUG),y)
+  DEBFLAGS = -O -g -DSCULL_DEBUG # "-O" is needed to expand inlines
+else
+  DEBFLAGS = -O2
+endif
 
-all: $(LIBRARY)
+EXTRA_CFLAGS += $(DEBFLAGS)
 
-$(LIBRARY): $(OBJECTS)
-	ar rcs $(LIBRARY) $(OBJECTS)
+ifneq ($(KERNELRELEASE),)
+# call from kernel build system
+obj-m	:= aesdchar.o
+aesdchar-y := aesd-circular-buffer.o main.o
+else
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+KERNELDIR ?= /lib/modules/$(shell uname -r)/build
+PWD       := $(shell pwd)
+
+modules:
+	$(MAKE) -C $(KERNELDIR) M=$(PWD) modules
+
+endif
 
 clean:
-	rm -f $(OBJECTS) $(LIBRARY)
+	rm -rf *.o *~ core .depend .*.cmd *.ko *.mod.c .tmp_versions
+
