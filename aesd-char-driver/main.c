@@ -45,9 +45,9 @@ int aesd_open(struct inode *inode, struct file *filp)
 int aesd_release(struct inode *inode, struct file *filp)
 {
     PDEBUG("release");
-    /**
-     * TODO: handle release
-     */
+    // DONE: handle release
+    // Do nothing like scull does since filp->private_data was allocated in module_init().
+    // Will be freed in module_exit().
     return 0;
 }
 
