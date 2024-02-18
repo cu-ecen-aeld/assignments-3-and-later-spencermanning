@@ -7,6 +7,10 @@
         "pthread.h": "c",
         "queue.h": "c",
         "time.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "printk.h": "c",
+        "init.h": "c",
+        "fs.h": "c",
+        "aesdchar.h": "c"
     }
 }
