@@ -51,14 +51,72 @@ int aesd_release(struct inode *inode, struct file *filp)
     return 0;
 }
 
+/*
+ b. Return the content (or partial content) related to the most recent 10 write commands, 
+ in the order they were received, on any read attempt.
+    1. You should use the position specified in the read to determine the location and number of bytes to return.
+    2. You should honor the count argument by sending only up to the first “count” bytes 
+    back of the available bytes remaining.
+*/
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                 loff_t *f_pos)
 {
     ssize_t retval = 0;
+    struct aesd_buffer_entry *entry;
+    struct aesd_dev *local_device;
+    size_t offset_byte_rtn = 0;
+
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle read
-     */
+    // TODO: handle read
+    /* 
+    Private_data member from filp can be used to get aesd_dev
+    buff is the buffer to fill
+        Need to use copy_to_user to access this buffer directly
+    count is the max number of bytes to buf. May want/need less than this.
+        The number of bytes to read back into userspace using buff
+    f_pos is the pointer to the read offset
+        References a location in your virtual device
+        A specific byte of the circular buffer (char_offset)
+        Start the read at this offset
+        Update the pointer to point to the next offset
+
+    Return:
+    If retval == count, the requested number of bytes were transferred
+    If 0 < retval < count, only a portion has been returned (partial read). Encouraged.
+        "Read one command at a time from your driver.""
+    If 0, end of file
+    If negative, error occurred
+    */
+
+    // Need to make sure that filp and buf are defined
+    if ((!filp) || (!buf)) {
+        return -EINVAL;
+    }
+
+    local_device = filp->private_data;
+
+    if (mutex_lock_interruptible(&local_device->lock)) {
+        PDEBUG("Mutex not acquired");
+        // restart because mutex interrupted and we shouldn't continue
+        return -ERESTARTSYS;
+    }
+
+    entry = aesd_circular_buffer_find_entry_offset_for_fpos(&local_device->read_buffer, *f_pos, &offset_byte_rtn);
+
+    if (entry) {
+        if (copy_to_user(buf, entry->buffptr+offset_byte_rtn, 1)) {
+            // something bad occurred during copy to user
+            retval = -EFAULT;
+        }
+
+        // increment the byte offset pointer value to be used the next time aesd_read() is called
+        (*f_pos)++;
+        return 1;
+    }
+    // else no entry found and reached end of the circular buffer
+
+    mutex_unlock(&local_device->lock);
+
     return retval;
 }
 
