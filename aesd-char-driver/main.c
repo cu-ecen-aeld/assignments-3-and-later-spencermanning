@@ -28,10 +28,17 @@ struct aesd_dev aesd_device;
 
 int aesd_open(struct inode *inode, struct file *filp)
 {
+    struct aesd_dev *local_device;
     PDEBUG("open");
-    /**
-     * TODO: handle open
-     */
+
+    // DONE: handle open
+    // "Use inode->i_cdev with container_of to locate within aesd_dev"
+    local_device = container_of(inode->i_cdev, struct aesd_dev, cdev);
+    // "Set filp->private_data with our aesd_dev device struct"
+    filp->private_data = local_device;
+
+    // Check for device errors or other hardware problems if necessary
+
     return 0;
 }
 
