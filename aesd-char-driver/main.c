@@ -15,13 +15,12 @@
 #include <linux/init.h>
 #include <linux/printk.h>
 #include <linux/types.h>
-#include <linux/cdev.h>
-#include <linux/fs.h> // file_operations
+#include <linux/fs.h> // file_operations. For MKDEV()
 #include "aesdchar.h"
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
-MODULE_AUTHOR("Your Name Here"); /** TODO: fill in your name **/
+MODULE_AUTHOR("Spencer Manning"); /** DONE: fill in your name **/
 MODULE_LICENSE("Dual BSD/GPL");
 
 struct aesd_dev aesd_device;
