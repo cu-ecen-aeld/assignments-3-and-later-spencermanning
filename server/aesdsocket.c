@@ -19,6 +19,13 @@
 #include <time.h>
 #include <stdbool.h>
 
+// Assignment 8
+// 1 = for assignment 8
+// 0 = for prior assignments
+#ifndef USE_AESD_CHAR_DEVICE
+#define USE_AESD_CHAR_DEVICE 1
+#endif
+
 // const struct {
 //     sa_family_t sa_family;
 //     char        sa_data[14];
@@ -40,7 +47,12 @@ struct addrinfo *servinfo; // res
 int sockfd;
 
 void close_all_things() {
+// Asy8: "Ensure you do not remove the  /dev/aesdchar endpoint after exiting the aesdsocket application."
+// #ifdef USE_AESD_CHAR_DEVICE
+//     remove("/dev/aesdchar");
+#if USE_AESD_CHAR_DEVICE == 0
     remove("/var/tmp/aesdsocketdata");
+#endif
     shutdown(sockfd,SHUT_RDWR);
     close(sockfd);
     freeaddrinfo(servinfo); // Free the malloc'd space from getaddrinfo()
@@ -237,10 +249,19 @@ int main (int argc, char *argv[]) {
     }
 
     // Start with a clean file
+// Asy8: "Ensure you do not remove the  /dev/aesdchar endpoint after exiting the aesdsocket application."
+// #ifdef USE_AESD_CHAR_DEVICE
+//     remove("/dev/aesdchar");
+#if USE_AESD_CHAR_DEVICE == 0
     remove("/var/tmp/aesdsocketdata");
+#endif
 
     FILE *file;
+#ifdef USE_AESD_CHAR_DEVICE
+    file = fopen("/dev/aesdchar", "a+");
+#else
     file = fopen("/var/tmp/aesdsocketdata", "a+");
+#endif
     if (!file) {
         syslog(LOG_ERR, "File didn't open\n");
         printf("File didn't open\n");
@@ -306,11 +327,12 @@ int main (int argc, char *argv[]) {
     pthread_mutex_init(&mutex, NULL);
     pthread_mutex_init(&timer_pause_mutex, NULL);
 
-    pthread_t timer_thread_id;
-    if (pthread_create(&timer_thread_id, NULL, timer_thread, &file) != 0) {
-        syslog(LOG_ERR, "Timer thread creation failed");
-        return 1;
-    }
+    // Asy8 says to remove timestamp printing
+    // pthread_t timer_thread_id;
+    // if (pthread_create(&timer_thread_id, NULL, timer_thread, &file) != 0) {
+    //     syslog(LOG_ERR, "Timer thread creation failed");
+    //     return 1;
+    // }
 
     // Prevent the timer thread from running until a connection is accepted.
     pthread_mutex_lock(&timer_pause_mutex);
@@ -344,7 +366,11 @@ int main (int argc, char *argv[]) {
             pthread_mutex_unlock(&timer_pause_mutex);
 
             printf("Freopening file\n");
+#ifdef USE_AESD_CHAR_DEVICE
+            freopen("/dev/aesdchar", "w+", file);
+#else
             freopen("/var/tmp/aesdsocketdata", "w+", file);
+#endif
             if (!file) {
                 syslog(LOG_ERR, "File didn't freopen\n");
                 printf("File didn't freopen\n");
