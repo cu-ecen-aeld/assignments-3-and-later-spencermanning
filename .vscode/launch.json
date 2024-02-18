@@ -3,6 +3,14 @@
         {
             "type": "bashdb",
             "request": "launch",
+            "name": "drivertest.sh",
+            "cwd": "${workspaceFolder}",
+            "program": "${workspaceFolder}/assignment-autotest/test/assignment8-yocto/drivertest.sh",
+            "args": []
+        },
+        {
+            "type": "bashdb",
+            "request": "launch",
             "name": "./full-test.sh",
             "cwd": "${workspaceFolder}",
             "program": "${workspaceFolder}/full-test.sh",
