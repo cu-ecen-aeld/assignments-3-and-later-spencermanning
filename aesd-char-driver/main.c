@@ -120,14 +120,37 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     return retval;
 }
 
+
+/*
+  a. Allocate memory for each write command as it is received, 
+  supporting any length of write request (up to the length of memory which can be allocated through kmalloc), 
+  and saving the write command content within allocated memory.  
+    i. The write command will be terminated with a \n character as was done with the aesdsocket application.
+        1. Write operations which do not include a \n character should be saved and appended by
+        future write operations and should not be written to the circular buffer until terminated.
+    ii. The content for the most recent 10 write commands should be saved.  
+    iii. Memory associated with write commands more than 10 writes ago should be freed.
+    iv. Write position and write file offsets can be ignored on this assignment, 
+    each write will just write to the most recent entry in the history buffer or append to any unterminated command.
+    v. For the purpose of this assignment you can use kmalloc for all allocations 
+    regardless of size, and assume writes will be small enough to work with kmalloc.
+*/
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
     ssize_t retval = -ENOMEM;
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
-    /**
-     * TODO: handle write
-     */
+    // TODO: handle write
+    /*
+    fpos - will either append to the command being written when no newline received or
+        write to the command buffer when newline received.
+    
+    REturn:
+    If retval == count, success number of bytes written
+    If less than count, only part written. May retry.
+    If 0, nothing written, may retry.
+    If neg, error occurred.
+    */
     return retval;
 }
 struct file_operations aesd_fops = {
