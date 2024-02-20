@@ -259,7 +259,7 @@ int aesd_init_module(void)
 {
     dev_t dev = 0;
     int result;
-    result = alloc_chrdev_region(&dev, aesd_minor, 1, "aesdchar");
+    result = alloc_chrdev_region(&dev, aesd_minor, 1, "aesdchar"); // calls register_chrdev_region()
     aesd_major = MAJOR(dev);
     if (result < 0) {
         printk(KERN_WARNING "Can't get major %d\n", aesd_major);
@@ -267,13 +267,15 @@ int aesd_init_module(void)
     }
     memset(&aesd_device,0,sizeof(struct aesd_dev));
 
-    /**
-     * TODO: initialize the AESD specific portion of the device
-     */
-
+    // DONE: initialize the AESD specific portion of the device
+    // Initializing the locking primitive here for example
+    aesd_circular_buffer_init(&aesd_device.circ_buffer);
+    mutex_init(&aesd_device.lock);
+    aesd_device.incomplete_write_buffer = NULL;
+    aesd_device.incomplete_write_buffer_size = 0;
     result = aesd_setup_cdev(&aesd_device);
 
-    if( result ) {
+    if (result) {
         unregister_chrdev_region(dev, 1);
     }
     return result;
