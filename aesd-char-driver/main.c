@@ -137,19 +137,99 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
                 loff_t *f_pos)
 {
-    ssize_t retval = -ENOMEM;
+    ssize_t retval = -EAGAIN;
+    const char *lost_entry = NULL;
+
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
     // TODO: handle write
     /*
     fpos - will either append to the command being written when no newline received or
         write to the command buffer when newline received.
     
-    REturn:
+    Return:
+    TODO: Technically, I am able to write MORE than count into the buffer if I had previously received a non-null
+            terminated buffer to write. Is returning more than count possible? Will this break the test script?
     If retval == count, success number of bytes written
-    If less than count, only part written. May retry.
+    If less than count, only part written. May retry. (I'm not doing)
     If 0, nothing written, may retry.
     If neg, error occurred.
     */
+
+    if ((!filp) || (!buf)) {
+     return -EINVAL;
+    }
+
+    PDEBUG("Writing %zu bytes at offset of %lld", count, *f_pos);
+
+    struct aesd_dev *dev = filp->private_data;
+
+    // The data to write needs to be dynamically allocated to be available 
+    // char *temp_write_data = kmalloc(count, GFP_KERNEL);
+    char *temp_write_data = NULL; // FIXME: Can I get by with just this instead of allocating the write data here?
+
+    // if (!temp_write_data) {
+    //     PDBEBUG("Write data not kmalloc'd");
+    //     retval = -ENOMEM; // signifies that memory was not malloc'd
+    //     return retval;
+    // }
+
+    if (copy_from_user(temp_write_data, buf, count)) {
+        // kfree(temp_write_data);
+        retval = -EFAULT;
+        return retval;
+    }
+
+    if (mutex_lock_interruptible(&dev->lock) != 0) {
+        PDEBUG("Couldn't lock mutex");
+        return -ERESTARTSYS;
+    }
+
+    // Write all dev->incomplete_write_buffer_size + count bytes to circular buffer if a \n was found.
+    if (strchr(temp_write_data, '\n')) {
+        struct aesd_buffer_entry new_entry;
+        
+        // If haven't yet started to fill in the write buffer
+        if (dev->incomplete_write_buffer == NULL) {
+            new_entry.buffptr = temp_write_data;
+            new_entry.size = count;
+        }
+        else { // append 
+            memcpy(dev->incomplete_write_buffer + dev->incomplete_write_buffer_size, temp_write_data, count);
+            new_entry.buffptr = dev->incomplete_write_buffer;
+            new_entry.size = dev->incomplete_write_buffer_size + count;
+        }
+        
+        lost_entry = aesd_circular_buffer_add_entry(&dev->circ_buffer, &new_entry);
+        
+        if (lost_entry) {
+            kfree(lost_entry); // FIXME: Will this work??
+            lost_entry = NULL;
+        }
+        // clear out incomplete_write_buffer and incomplete_write_size
+        dev->incomplete_write_buffer = NULL;
+        dev->incomplete_write_buffer_size = 0;
+
+        retval = count;
+    }
+    else { // append to saved write buffer because a \n was not yet found.
+        // temp_write_data = krealloc(dev->incomplete_write_buffer, count, GFP_KERNEL);
+        // if (!dev->incomplete_write_buffer) {
+        //     PDEBUG("Realloc didn't work for %s", dev->incomplete_write_buffer);
+        //     kfree(dev->incomplete_write_buffer);
+        //     return -ENOMEM;
+        // }
+
+        memcpy(dev->incomplete_write_buffer + dev->incomplete_write_buffer_size, temp_write_data, count);
+        // TODO: Confirm the index value is right
+        // dev->incomplete_write_buffer[dev->incomplete_write_buffer_size + count] = temp_write_data; 
+        dev->incomplete_write_buffer_size += count;
+        retval = 0; // nothing will be currently written
+    }
+
+    mutex_unlock(&dev->lock);
+
+    *f_pos += retval;
+
     return retval;
 }
 struct file_operations aesd_fops = {

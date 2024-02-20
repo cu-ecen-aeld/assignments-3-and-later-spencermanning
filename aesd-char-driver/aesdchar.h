@@ -33,8 +33,8 @@ struct aesd_dev
     struct cdev cdev;     /* Char device structure      */
     struct mutex lock;
     struct aesd_circular_buffer read_buffer;
-    char *write_buffer;
-    size_t write_buffer_size;
+    char *incomplete_write_buffer;
+    size_t incomplete_write_buffer_size;
 };
 
 
