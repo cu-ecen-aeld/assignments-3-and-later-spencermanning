@@ -67,7 +67,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     size_t offset_byte_rtn = 0;
 
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
-    // TODO: handle read
+    // DONE: handle read
     /* 
     Private_data member from filp can be used to get aesd_dev
     buff is the buffer to fill
@@ -140,7 +140,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     const char *lost_entry = NULL;
 
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
-    // TODO: handle write
+    // DONE: handle write
     /*
     fpos - will either append to the command being written when no newline received or
         write to the command buffer when newline received.
