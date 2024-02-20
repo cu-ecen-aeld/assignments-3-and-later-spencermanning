@@ -16,6 +16,7 @@
 #include <linux/printk.h>
 #include <linux/types.h>
 #include <linux/fs.h> // file_operations. For MKDEV()
+#include <linux/string.h> // for strchr()
 #include "aesdchar.h"
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
@@ -27,14 +28,14 @@ struct aesd_dev aesd_device;
 
 int aesd_open(struct inode *inode, struct file *filp)
 {
-    struct aesd_dev *local_device;
+    struct aesd_dev *dev;
     PDEBUG("open");
 
     // DONE: handle open
     // "Use inode->i_cdev with container_of to locate within aesd_dev"
-    local_device = container_of(inode->i_cdev, struct aesd_dev, cdev);
+    dev = container_of(inode->i_cdev, struct aesd_dev, cdev);
     // "Set filp->private_data with our aesd_dev device struct"
-    filp->private_data = local_device;
+    filp->private_data = dev;
 
     // Check for device errors or other hardware problems if necessary
 
@@ -62,7 +63,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 {
     ssize_t retval = 0;
     struct aesd_buffer_entry *entry;
-    struct aesd_dev *local_device;
+    struct aesd_dev *dev = filp->private_data;
     size_t offset_byte_rtn = 0;
 
     PDEBUG("read %zu bytes with offset %lld",count,*f_pos);
@@ -92,15 +93,13 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
         return -EINVAL;
     }
 
-    local_device = filp->private_data;
-
-    if (mutex_lock_interruptible(&local_device->lock)) {
+    if (mutex_lock_interruptible(&dev->lock)) {
         PDEBUG("Mutex not acquired");
         // restart because mutex interrupted and we shouldn't continue
         return -ERESTARTSYS;
     }
 
-    entry = aesd_circular_buffer_find_entry_offset_for_fpos(&local_device->read_buffer, *f_pos, &offset_byte_rtn);
+    entry = aesd_circular_buffer_find_entry_offset_for_fpos(&dev->circ_buffer, *f_pos, &offset_byte_rtn);
 
     if (entry) {
         if (copy_to_user(buf, entry->buffptr+offset_byte_rtn, 1)) {
@@ -114,7 +113,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
     }
     // else no entry found and reached end of the circular buffer
 
-    mutex_unlock(&local_device->lock);
+    mutex_unlock(&dev->lock);
 
     return retval;
 }
@@ -260,8 +259,7 @@ int aesd_init_module(void)
 {
     dev_t dev = 0;
     int result;
-    result = alloc_chrdev_region(&dev, aesd_minor, 1,
-            "aesdchar");
+    result = alloc_chrdev_region(&dev, aesd_minor, 1, "aesdchar");
     aesd_major = MAJOR(dev);
     if (result < 0) {
         printk(KERN_WARNING "Can't get major %d\n", aesd_major);
