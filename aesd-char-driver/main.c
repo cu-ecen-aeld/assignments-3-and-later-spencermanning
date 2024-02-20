@@ -288,11 +288,17 @@ void aesd_cleanup_module(void)
 
     cdev_del(&aesd_device.cdev);
 
-    /**
-     * TODO: cleanup AESD specific poritions here as necessary
-     */
+    // DONE: cleanup AESD specific portions here as necessary
+    // Balance what I initialized in the aesd_init_module. ie Free memory, stop using locking primitiives.
+    // Remove all members of buffer
+    struct aesd_buffer_entry *entry;
+    AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.circ_buffer, int i = 0) {
+        kfree(entry->buffptr);
+    }
 
+    mutex_destroy(&aesd_device.lock);
     unregister_chrdev_region(devno, 1);
+    PDEBUG("Cleanup the aesd module");
 }
 
 
