@@ -145,12 +145,14 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * new start location.
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
+* @return NULL or buffptr, depending if the out_offs entry was overwritten.
 */
-void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
 {
     /**
     * TODO: implement per description
     */
+    const char * lost_entry_buffptr = NULL;
     // Add the input value to the buffer
     memcpy(&buffer->entry[buffer->in_offs], add_entry, sizeof(*add_entry));
     // memcpy(&buffer->entry[buffer->in_offs], add_entry, add_entry->size);
@@ -164,17 +166,27 @@ void aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const s
     buffer->in_offs++;
     buffer->in_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
 
+    // if buffer is already full, overwrite oldest entry with newest
     if (buffer->full) {
+        // Save buffptr to entry about to be overwritten before it is overwritten
+        lost_entry_buffptr = buffer->entry[buffer->out_offs].buffptr;
+
         // Advance output offset as well. Previous data is lost.
         buffer->out_offs++;
         buffer->out_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        
+        // TODO: Return either null or the pointer to the entry in the buffer that was overwritten
+        // Need to return the overwritten buffer pointer because it was previously alloc'd and needs 
+        // to now be freed in the caller.
+        return lost_entry_buffptr;
     }
-    else {
-        if (buffer->in_offs == buffer->out_offs) {
+    // if buffer just got full
+    if (buffer->in_offs == buffer->out_offs) {
             buffer->full = true;
             PDEBUG("Buffer full: %i\n", buffer->full);
-        }
     }
+    // No entry was lost, return null
+    return NULL;
 }
 
 /**
