@@ -48,7 +48,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     A. |out/in             | starting state. out = in. Buffer is empty.
     B. |  out------->in    | in has advanced but isn't yet behind out.
     C. |-->in       out----| in has rolled over and is now behind out.
-    D. |------>out/in------| out has caught up to in. out = in again. Buffer is full.
+    D. |------>in/out------| in has caught up to out. out = in again. Buffer is full.
     */
     // Scenario A
     if (buffer->out_offs == buffer->in_offs && !buffer->full) {
@@ -152,41 +152,64 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
     * TODO: implement per description
     */
     const char * lost_entry_buffptr = NULL;
-    // Add the input value to the buffer
-    memcpy(&buffer->entry[buffer->in_offs], add_entry, sizeof(*add_entry));
-    // memcpy(&buffer->entry[buffer->in_offs], add_entry, add_entry->size);
     PDEBUG("add_entry: %s with size: %zu at in_offs: %i and out_offs: %i\n", (char*)add_entry->buffptr, add_entry->size, buffer->in_offs, buffer->out_offs);
+    
     // PDEBUG("size: %zu\n", add_entry->size);
     // for (int i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++) {
     //     PDEBUG("buff[%i]: %s\n", i, (char*)buffer->entry[i].buffptr);
     // }
     // PDEBUG("end\n");
-    // Advance input offset
-    buffer->in_offs++;
-    buffer->in_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+
+    PDEBUG("Overwrite %s with %s\n", (char*)buffer->entry[buffer->out_offs].buffptr, (char*)add_entry->buffptr);
+    PDEBUG("One: %s", (char*)buffer->entry[buffer->out_offs].buffptr);
+    PDEBUG("One length: %li", strlen((char*)buffer->entry[buffer->out_offs].buffptr));
+    PDEBUG("Two: %s", buffer->entry[buffer->out_offs].buffptr);
+    PDEBUG("Two length: %li", strlen(buffer->entry[buffer->out_offs].buffptr));
+    // PDEBUG("3ee: %s", buffer->entry[buffer->out_offs].buffptr + 1);
+    // PDEBUG("3ee length: %d", strlen(buffer->entry[buffer->out_offs].buffptr + 1));
 
     // if buffer is already full, overwrite oldest entry with newest
     if (buffer->full) {
-        PDEBUG("Overwrite %s with %s\n", (char*)buffer->entry[buffer->out_offs].buffptr, (char*)add_entry->buffptr);
+
         // Save buffptr to entry about to be overwritten before it is overwritten
         lost_entry_buffptr = buffer->entry[buffer->out_offs].buffptr;
 
         // Advance output offset. Previous data is lost.
         buffer->out_offs++;
         buffer->out_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+
+        // Add the input value to the buffer
+        memcpy(&buffer->entry[buffer->in_offs], add_entry, sizeof(*add_entry));
+        // memcpy(&buffer->entry[buffer->in_offs], add_entry, add_entry->size);
         
+        // Advance input offset
+        buffer->in_offs++;
+        buffer->in_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+
         // TODO: Return either null or the pointer to the entry in the buffer that was overwritten
         // Need to return the overwritten buffer pointer because it was previously alloc'd and needs 
         // to now be freed in the caller.
         return lost_entry_buffptr;
     }
-    // if buffer just got full
-    if (buffer->in_offs == buffer->out_offs) {
-            buffer->full = true;
-            PDEBUG("Buffer full: %i\n", buffer->full);
+    else {
+        // Add the input value to the buffer
+        memcpy(&buffer->entry[buffer->in_offs], add_entry, sizeof(*add_entry));
+        // memcpy(&buffer->entry[buffer->in_offs], add_entry, add_entry->size);
+        
+        // Advance input offset
+        buffer->in_offs++;
+        buffer->in_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
+        
+        // if buffer just got full
+        if (buffer->in_offs == buffer->out_offs) {
+                buffer->full = true;
+                PDEBUG("Buffer now filled: %i\n", buffer->full);
+        }
+
+        // No entry was lost, return null
+        PDEBUG("No entry was lost\n");
+        return NULL;
     }
-    // No entry was lost, return null
-    return NULL;
 }
 
 /**
