@@ -167,10 +167,11 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
 
     // if buffer is already full, overwrite oldest entry with newest
     if (buffer->full) {
+        PDEBUG("Overwrite %s with %s\n", (char*)buffer->entry[buffer->out_offs].buffptr, (char*)add_entry->buffptr);
         // Save buffptr to entry about to be overwritten before it is overwritten
         lost_entry_buffptr = buffer->entry[buffer->out_offs].buffptr;
 
-        // Advance output offset as well. Previous data is lost.
+        // Advance output offset. Previous data is lost.
         buffer->out_offs++;
         buffer->out_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
         

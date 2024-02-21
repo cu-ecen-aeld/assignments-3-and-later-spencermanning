@@ -17,6 +17,8 @@ echo "---Unloading"
 echo "---Loading"
 ./aesdchar_load
 
+# strace -o /tmp/strace.txt cat /dev/aesdchar
+
 if [ "$1" = "d" ]; then
     echo "---Running drivertest.sh"
     ../assignment-autotest/test/assignment8/drivertest.sh
