@@ -138,6 +138,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 {
     ssize_t retval = -EAGAIN;
     const char *lost_entry = NULL;
+    struct aesd_dev *dev = filp->private_data;
+    char *temp_write_data = NULL; // FIXME: Can I get by with just this instead of allocating the write data here?
 
     PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
     // DONE: handle write
@@ -160,11 +162,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 
     PDEBUG("Writing %zu bytes at offset of %lld", count, *f_pos);
 
-    struct aesd_dev *dev = filp->private_data;
 
     // The data to write needs to be dynamically allocated to be available 
     // char *temp_write_data = kmalloc(count, GFP_KERNEL);
-    char *temp_write_data = NULL; // FIXME: Can I get by with just this instead of allocating the write data here?
 
     // if (!temp_write_data) {
     //     PDBEBUG("Write data not kmalloc'd");
@@ -284,6 +284,8 @@ int aesd_init_module(void)
 
 void aesd_cleanup_module(void)
 {
+    struct aesd_buffer_entry *entry;
+    int i = 0;
     dev_t devno = MKDEV(aesd_major, aesd_minor);
 
     cdev_del(&aesd_device.cdev);
@@ -291,8 +293,7 @@ void aesd_cleanup_module(void)
     // DONE: cleanup AESD specific portions here as necessary
     // Balance what I initialized in the aesd_init_module. ie Free memory, stop using locking primitiives.
     // Remove all members of buffer
-    struct aesd_buffer_entry *entry;
-    AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.circ_buffer, int i = 0) {
+    AESD_CIRCULAR_BUFFER_FOREACH(entry, &aesd_device.circ_buffer, i) {
         kfree(entry->buffptr);
     }
 
