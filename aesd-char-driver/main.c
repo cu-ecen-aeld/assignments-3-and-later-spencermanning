@@ -141,7 +141,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     struct aesd_dev *dev = filp->private_data;
     char *temp_write_data = NULL; // FIXME: Can I get by with just this instead of allocating the write data here?
 
-    PDEBUG("write %zu bytes with offset %lld",count,*f_pos);
+    PDEBUG("Writing %zu bytes at offset of %lld", count, *f_pos);
+    PDEBUG("Buff is %s", buf);
+
     // DONE: handle write
     /*
     fpos - will either append to the command being written when no newline received or
@@ -160,9 +162,6 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
      return -EINVAL;
     }
 
-    PDEBUG("Writing %zu bytes at offset of %lld", count, *f_pos);
-
-
     // The data to write needs to be dynamically allocated to be available 
     // char *temp_write_data = kmalloc(count, GFP_KERNEL);
 
@@ -174,9 +173,11 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
 
     if (copy_from_user(temp_write_data, buf, count)) {
         // kfree(temp_write_data);
+        PDEBUG("Copy from user didn't work");
         retval = -EFAULT;
         return retval;
     }
+    PDEBUG("---copy from user worked");
 
     if (mutex_lock_interruptible(&dev->lock) != 0) {
         PDEBUG("Couldn't lock mutex");
