@@ -40,10 +40,9 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     int char_offset_signed = char_offset; // to allow it to go negative
 
     PDEBUG("* char_offset: %zu\n", char_offset);
-    // PDEBUG("* char_offset_signed: %i\n", char_offset_signed);
-    PDEBUG("* buffer is full?: %i\n", buffer->full);
-    PDEBUG("* buffer->in_offs: %i\n", buffer->in_offs);
-    PDEBUG("* buffer->out_offs: %i\n", buffer->out_offs);
+    // PDEBUG("* buffer is full?: %i\n", buffer->full);
+    // PDEBUG("* buffer->in_offs: %i\n", buffer->in_offs);
+    // PDEBUG("* buffer->out_offs: %i\n", buffer->out_offs);
 
     /* 4 possible scenarios to search through
     A. |out/in             | starting state. out = in. Buffer is empty.
@@ -77,7 +76,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
     }
     
     // Scenario C or Scenario D (same situation as far as looping goes)
-    if ((buffer->out_offs >= buffer->in_offs) || // Scenario C
+    if ((buffer->out_offs > buffer->in_offs) || // Scenario C
         (buffer->out_offs == buffer->in_offs && buffer->full)) { // Scenario D
         uint8_t entries_checked;
         PDEBUG("----Scenario C or D\n");
@@ -93,7 +92,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             }
 
             entries_checked++;
-            PDEBUG("entries_checked: %i\n", entries_checked);
+            // PDEBUG("entries_checked: %i\n", entries_checked);
             // check current index
             // PDEBUG("Current entry size: %zu\n", buffer->entry[index].size);
             char_offset_signed -= buffer->entry[index].size;
