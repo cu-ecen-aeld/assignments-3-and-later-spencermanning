@@ -247,7 +247,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         // copy temp_write_data to the end of the incomplete_write_buffer
         memcpy(dev->incomplete_write_buffer + dev->incomplete_write_buffer_size, temp_write_data, count);
         dev->incomplete_write_buffer_size += count;
-        retval = 0; // nothing will be currently written, so return 0
+
+        retval = count; // NEEDS to return count even if not writing to circular buffer
     }
 
     mutex_unlock(&dev->lock);
