@@ -160,16 +160,9 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
     // }
     // PDEBUG("end\n");
 
-    PDEBUG("Overwrite %s with %s\n", (char*)buffer->entry[buffer->out_offs].buffptr, (char*)add_entry->buffptr);
-    PDEBUG("One: %s", (char*)buffer->entry[buffer->out_offs].buffptr);
-    PDEBUG("One length: %li", strlen((char*)buffer->entry[buffer->out_offs].buffptr));
-    PDEBUG("Two: %s", buffer->entry[buffer->out_offs].buffptr);
-    PDEBUG("Two length: %li", strlen(buffer->entry[buffer->out_offs].buffptr));
-    // PDEBUG("3ee: %s", buffer->entry[buffer->out_offs].buffptr + 1);
-    // PDEBUG("3ee length: %d", strlen(buffer->entry[buffer->out_offs].buffptr + 1));
-
     // if buffer is already full, overwrite oldest entry with newest
     if (buffer->full) {
+        PDEBUG("Overwrite %s with %s\n", (char*)buffer->entry[buffer->out_offs].buffptr, (char*)add_entry->buffptr);
 
         // Save buffptr to entry about to be overwritten before it is overwritten
         lost_entry_buffptr = buffer->entry[buffer->out_offs].buffptr;

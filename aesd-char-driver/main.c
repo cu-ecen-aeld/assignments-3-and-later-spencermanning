@@ -138,9 +138,16 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     ssize_t retval = -EAGAIN;
     const char *lost_entry = NULL;
     struct aesd_dev *dev = filp->private_data;
-    // The data to write needs to be dynamically allocated to be available 
-    char *temp_write_data = kmalloc(count, GFP_KERNEL);
+    // The data to write needs to be dynamically allocated to work with copy_from_user()
+    // FIXME: Using count+1 to account for the newline character. IS THIS NECESSARY??
+    char *temp_write_data = kmalloc(count+1, GFP_KERNEL);
+    // char *temp_write_data = kmalloc(count, GFP_KERNEL);
     struct aesd_buffer_entry new_entry;
+
+    // Have to put this after kmalloc to satisfy the compiler.
+    // This is to account for the null terminator. 
+    // The code works without this, but this just helps to make sure the null terminator is included in the input buffer.
+    // count += 1; 
 
     PDEBUG("----------------->");
     PDEBUG("Writing %zu bytes at offset of %lld", count, *f_pos);
@@ -155,10 +162,8 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         write to the command buffer when newline received.
     
     Return:
-    TODO: Technically, I am able to write MORE than count into the buffer if I had previously received a non-null
-            terminated buffer to write. Is returning more than count possible? Will this break the test script?
     If retval == count, success number of bytes written
-    If less than count, only part written. May retry. (I'm not doing)
+    If less than count, only part written (may be written into incomplete_write_buffer only). May retry.
     If 0, nothing written, may retry.
     If neg, error occurred.
     */
