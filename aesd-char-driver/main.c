@@ -16,7 +16,7 @@
 #include <linux/printk.h>
 #include <linux/types.h>
 #include <linux/fs.h> // file_operations. For MKDEV()
-#include <linux/string.h> // for strchr()
+#include <linux/slab.h> // for kfree()
 #include "aesdchar.h"
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
@@ -183,8 +183,13 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         return -ERESTARTSYS;
     }
 
+    // if () {
+    //     PDEBUG("temp_write_data didn't get filled. Should have failed previously.");
+    //     return 0;
+    // }
+
     // Write all dev->incomplete_write_buffer_size + count bytes to circular buffer if a \n was found.
-    if (strchr(temp_write_data, '\n')) {
+    if (temp_write_data != NULL && memchr(temp_write_data, '\n', count)) {
         struct aesd_buffer_entry new_entry;
         
         // If haven't yet started to fill in the write buffer
@@ -193,9 +198,15 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
             new_entry.size = count;
         }
         else { // append 
-            memcpy(dev->incomplete_write_buffer + dev->incomplete_write_buffer_size, temp_write_data, count);
-            new_entry.buffptr = dev->incomplete_write_buffer;
-            new_entry.size = dev->incomplete_write_buffer_size + count;
+            if (temp_write_data != NULL) { // to satisfy the compiler warnings. Didn't work.
+                memcpy(dev->incomplete_write_buffer + dev->incomplete_write_buffer_size, temp_write_data, count);
+                new_entry.buffptr = dev->incomplete_write_buffer;
+                new_entry.size = dev->incomplete_write_buffer_size + count;
+            }
+            else {
+                PDEBUG("temp_write_data is NULL");
+                return -ENOMEM;
+            }
         }
         
         lost_entry = aesd_circular_buffer_add_entry(&dev->circ_buffer, &new_entry);
