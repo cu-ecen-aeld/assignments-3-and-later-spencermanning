@@ -2,16 +2,17 @@
 #include <stdio.h>
 #include <stdlib.h>     // for exit()
 #include <sys/types.h>  // for socket
-#include <sys/socket.h> // for socket/shutdown
-#include <netdb.h>      // for getaddrinfo/freeaddrinfo()/addrinfo struct
-#include <string.h>     // for memset()
+#include <sys/socket.h> // for socket / shutdown
+#include <netdb.h>      // for getaddrinfo / freeaddrinfo() / addrinfo struct
+#include <string.h>     // for memset() / strcmp()
 #include <signal.h>     // for sigaction/SIGINT/SIGTERM
-#include <unistd.h>     // for read()
+#include <unistd.h>     // for read() / lseek() / fork() / setsid() / chdir()
 #include <errno.h>      // for errno
 #include <arpa/inet.h>  // for inet_ntop()
+#include <sys/stat.h>   // for S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH
 // extras
 #include <netinet/in.h>
-#include <fcntl.h>
+#include <fcntl.h> // also for lseek()
 
 // Assignment 6
 #include <sys/queue.h>
@@ -89,12 +90,13 @@ struct Node {
 struct threadArgs {
     char ipaddr[INET_ADDRSTRLEN];
     int acceptfd;
-    FILE *file;
+    // FILE *file;
+    int openfd;
     struct Node *thread_node;
 };
 
 pthread_mutex_t mutex;
-pthread_mutex_t timer_pause_mutex;
+// pthread_mutex_t timer_pause_mutex;
 
 void closeThread(struct threadArgs *args, int caller_line) {
     // NOTE: Closing the accept file descriptor apparently causes a "Bad file descriptor for other threads"
@@ -121,7 +123,7 @@ void* timer_thread(void * arg) {
     struct tm *timeinfo;
     char timestamp[30] ={0};
 
-    pthread_mutex_lock(&timer_pause_mutex);
+    // pthread_mutex_lock(&timer_pause_mutex);
 
     // Wait for 5 seconds to allow the other tests to finish before adding timestamps to the output file.
     sleep(5);
@@ -143,7 +145,7 @@ void* timer_thread(void * arg) {
         pthread_mutex_unlock(&mutex);
     }
 
-    pthread_mutex_unlock(&timer_pause_mutex);
+    // pthread_mutex_unlock(&timer_pause_mutex);
 
     // DON'T free the file here!
     pthread_exit(NULL);
@@ -153,7 +155,7 @@ void* connection_thread(void * arg) {
     
     // Unpack the conn_args
     struct threadArgs *conn_args = (struct threadArgs *)arg;
-
+    syslog(LOG_DEBUG, "Connection thread started for %s\n", conn_args->ipaddr);
     // 5e. Receives data over the connection and appends to file /var/tmp/aesdsocketdata, creating this file if it doesn’t exist.
     /*
     Your implementation should use a newline to separate data packets received.  
@@ -179,7 +181,8 @@ void* connection_thread(void * arg) {
             perror("Recv Error");
             closeThread(conn_args, __LINE__);
         }
-        if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
+        // if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
+        if (write(conn_args->openfd, &sockbuf1byte, 1) == -1) {
             syslog(LOG_ERR, "Write to file failed.");
             closeThread(conn_args, __LINE__);
         }
@@ -188,7 +191,8 @@ void* connection_thread(void * arg) {
         }
     } while (memcmp(&sockbuf1byte, &newlinechar, 1) != 0);
 
-    fflush(conn_args->file); // fwrite needs to be flushed after it's called
+    // fflush(conn_args->file); // fwrite() needs to be flushed after it's called to immediately write to the file
+    fsync(conn_args->openfd); //  write() needs to be flushed after it's called to immediately write to the file
 
     // 5f. Returns the full content of /var/tmp/aesdsocketdata to the client as soon as the received data packet completes.
     /* You may assume the total size of all packets sent 
@@ -199,13 +203,17 @@ void* connection_thread(void * arg) {
 
     char readbuf1byte[30] = {0}; // the sockettest.sh for asy6.1 works better with this as 30 chars
     ssize_t num_read;
-    int fseekerr = fseek(conn_args->file, 0, SEEK_SET);
-    if (fseekerr) {
-        exit(1);
-    }
+    // int fd = fileno(conn_args->file); // need to use for lseek().
+    // int lseekerr = lseek(conn_args->openfd, 0, SEEK_SET);
+    // if (lseekerr == -1 || lseekerr) { // has to respond with 0 since I'm moving to the beginning of the file
+    //     perror("lseek error");
+    //     exit(1);
+    // }
     do {
-        num_read = fread(&readbuf1byte, sizeof(char), 1, conn_args->file);
-        if (feof(conn_args->file)) {
+        // num_read = fread(&readbuf1byte, sizeof(char), 1, conn_args->file);
+        num_read = read(conn_args->openfd, &readbuf1byte, 1);
+        // if (feof(conn_args->file)) {
+        if (num_read == 0) {
             break;
         }
         if (send(conn_args->acceptfd, &readbuf1byte, 1, 0) == -1) {
@@ -256,20 +264,22 @@ int main (int argc, char *argv[]) {
     remove("/var/tmp/aesdsocketdata");
 #endif
 
-    FILE *file;
+    // FILE *file = NULL;
+    int openfd = 0;
 #ifdef USE_AESD_CHAR_DEVICE
-    file = fopen("/dev/aesdchar", "a+");
+    // file = fopen("/dev/aesdchar", "a+");
+    openfd = open("/dev/aesdchar",  O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
 #else
     file = fopen("/var/tmp/aesdsocketdata", "a+");
 #endif
-    if (!file) {
+    if (!openfd || openfd == -1) {
         syslog(LOG_ERR, "File didn't open\n");
-        printf("File didn't open\n");
+        printf("File didn't open\n\n");
         exit(1);
     }
 
     // Open logger
-    openlog(NULL,0,LOG_USER);
+    openlog(NULL, 0, LOG_USER);
     syslog(LOG_DEBUG, "Start aesdsocket.c\n");
     printf("We have started the aesdsocket\n");
 
@@ -325,7 +335,7 @@ int main (int argc, char *argv[]) {
     socklen_t client_addr_size = sizeof(clientinfo);
 
     pthread_mutex_init(&mutex, NULL);
-    pthread_mutex_init(&timer_pause_mutex, NULL);
+    // pthread_mutex_init(&timer_pause_mutex, NULL);
 
     // Asy8 says to remove timestamp printing
     // pthread_t timer_thread_id;
@@ -335,7 +345,7 @@ int main (int argc, char *argv[]) {
     // }
 
     // Prevent the timer thread from running until a connection is accepted.
-    pthread_mutex_lock(&timer_pause_mutex);
+    // pthread_mutex_lock(&timer_pause_mutex);
 
     // Initialize the head of the linked list
     struct Node *myNode = NULL;
@@ -359,19 +369,20 @@ int main (int argc, char *argv[]) {
             }
             continue;
         }
-        printf("--- Connection Accepted. Timer can start now.\n");
+        // printf("--- Connection Accepted. Timer can start now.\n");
+        printf("--- Connection Accepted.\n");
 
         if (firsttime) {
             // Allow timer thread to start
-            pthread_mutex_unlock(&timer_pause_mutex);
+            // pthread_mutex_unlock(&timer_pause_mutex);
 
-            printf("Freopening file\n");
+            // printf("Freopening file\n");
 #ifdef USE_AESD_CHAR_DEVICE
-            freopen("/dev/aesdchar", "w+", file);
+            // freopen("/dev/aesdchar", "w+", file);
 #else
-            freopen("/var/tmp/aesdsocketdata", "w+", file);
+            // freopen("/var/tmp/aesdsocketdata", "w+", file);
 #endif
-            if (!file) {
+            if (!openfd) {
                 syslog(LOG_ERR, "File didn't freopen\n");
                 printf("File didn't freopen\n");
                 exit(1);
@@ -408,7 +419,7 @@ int main (int argc, char *argv[]) {
         // Fill in the args with the current context
         strncpy(args->ipaddr, ipaddr, INET_ADDRSTRLEN);
         args->acceptfd = acceptfd;
-        args->file = file;
+        args->openfd = openfd;
         args->thread_node = myNode;
 
         if (pthread_create(&myNode->thread_id, NULL, connection_thread, args) != 0) {
@@ -448,7 +459,8 @@ int main (int argc, char *argv[]) {
     and deleting the file /var/tmp/aesdsocketdata.
     */
     printf("Caught signal, exiting\n");
-    fclose(file);
+    // fclose(file);
+    close(openfd);
     free(myNode);
     close_all_things();
 

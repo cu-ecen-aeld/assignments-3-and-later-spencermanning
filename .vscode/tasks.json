@@ -11,8 +11,8 @@
         },
         "problemMatcher": "$gcc",
         "options": {
-            // "cwd": "${workspaceRoot}/server"
-            "cwd": "${workspaceRoot}/aesd-char-driver" // for asy7.1 and asy8
+            "cwd": "${workspaceRoot}/server"
+            // "cwd": "${workspaceRoot}/aesd-char-driver" // for asy7.1 and asy8
         }
       }
     ],

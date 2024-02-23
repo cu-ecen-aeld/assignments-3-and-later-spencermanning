@@ -57,6 +57,8 @@ int aesd_release(struct inode *inode, struct file *filp)
     1. You should use the position specified in the read to determine the location and number of bytes to return.
     2. You should honor the count argument by sending only up to the first “count” bytes 
     back of the available bytes remaining.
+        *** I do this indirectly because even though I only send 1 byte back per read, the calling fuction will
+        *** call aesd_read() multiple times to get the full count.
 */
 ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
                 loff_t *f_pos)
