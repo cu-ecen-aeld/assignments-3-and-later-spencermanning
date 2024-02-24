@@ -52,10 +52,10 @@ int aesd_release(struct inode *inode, struct file *filp)
 }
 
 /*
- b. Return the content (or partial content) related to the most recent 10 write commands, 
+ b. Return the content (or partial content) related to the most recent 10 write commands,
  in the order they were received, on any read attempt.
     1. You should use the position specified in the read to determine the location and number of bytes to return.
-    2. You should honor the count argument by sending only up to the first “count” bytes 
+    2. You should honor the count argument by sending only up to the first “count” bytes
     back of the available bytes remaining.
         *** I do this indirectly because even though I only send 1 byte back per read, the calling fuction will
         *** call aesd_read() multiple times to get the full count.
@@ -70,7 +70,7 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 
     PDEBUG("Reading up to 0x%zx bytes at offset %lld", count, *f_pos);
     // DONE: handle read
-    /* 
+    /*
     Private_data member from filp can be used to get aesd_dev
     buff is the buffer to fill
         Need to use copy_to_user to access this buffer directly
@@ -121,17 +121,17 @@ ssize_t aesd_read(struct file *filp, char __user *buf, size_t count,
 
 
 /*
-  a. Allocate memory for each write command as it is received, 
-  supporting any length of write request (up to the length of memory which can be allocated through kmalloc), 
-  and saving the write command content within allocated memory.  
+  a. Allocate memory for each write command as it is received,
+  supporting any length of write request (up to the length of memory which can be allocated through kmalloc),
+  and saving the write command content within allocated memory.
     i. The write command will be terminated with a \n character as was done with the aesdsocket application.
         1. Write operations which do not include a \n character should be saved and appended by
         future write operations and should not be written to the circular buffer until terminated.
-    ii. The content for the most recent 10 write commands should be saved.  
+    ii. The content for the most recent 10 write commands should be saved.
     iii. Memory associated with write commands more than 10 writes ago should be freed.
-    iv. Write position and write file offsets can be ignored on this assignment, 
+    iv. Write position and write file offsets can be ignored on this assignment,
     each write will just write to the most recent entry in the history buffer or append to any unterminated command.
-    v. For the purpose of this assignment you can use kmalloc for all allocations 
+    v. For the purpose of this assignment you can use kmalloc for all allocations
     regardless of size, and assume writes will be small enough to work with kmalloc.
 */
 ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
@@ -147,9 +147,9 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     struct aesd_buffer_entry new_entry;
 
     // Have to put this after kmalloc to satisfy the compiler.
-    // This is to account for the null terminator. 
+    // This is to account for the null terminator.
     // The code works without this, but this just helps to make sure the null terminator is included in the input buffer.
-    // count += 1; 
+    // count += 1;
 
     PDEBUG("----------------->");
     PDEBUG("Writing %zu bytes at offset of %lld", count, *f_pos);
@@ -162,7 +162,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     /*
     fpos - will either append to the command being written when no newline received or
         write to the command buffer when newline received.
-    
+
     Return:
     If retval == count, success number of bytes written
     If less than count, only part written (may be written into incomplete_write_buffer only). May retry.
@@ -195,7 +195,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     // Write all dev->incomplete_write_buffer_size + count bytes to circular buffer if a \n was found.
     if (temp_write_data != NULL && memchr(temp_write_data, '\n', count)) {
         PDEBUG("Found a newline in the write data");
-        
+
         // If haven't yet started to fill in the write buffer
         if (dev->incomplete_write_buffer == NULL) {
             PDEBUG("Started a new_entry");
@@ -206,14 +206,14 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
             PDEBUG("Appending \\n data to previous data");
             // if (temp_write_data != NULL) { // to satisfy the compiler warnings. Didn't work.
                 dev->incomplete_write_buffer = krealloc(dev->incomplete_write_buffer, dev->incomplete_write_buffer_size + count, GFP_KERNEL);
-                    
+
                 if (!dev->incomplete_write_buffer) {
                     PDEBUG("Realloc didn't work for %s", dev->incomplete_write_buffer);
                     kfree(dev->incomplete_write_buffer);
                     mutex_unlock(&dev->lock);
                     return -ENOMEM;
                 }
-            
+
                 // copy temp_write_data to the end of the incomplete_write_buffer
                 memcpy(dev->incomplete_write_buffer + dev->incomplete_write_buffer_size, temp_write_data, count);
                 new_entry.buffptr = dev->incomplete_write_buffer;
@@ -225,10 +225,10 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
             //     return -ENOMEM;
             // }
         }
-        
+
         PDEBUG("Adding entry to circular buffer");
         lost_entry = aesd_circular_buffer_add_entry(&dev->circ_buffer, &new_entry);
-        
+
         if (lost_entry) {
             PDEBUG("Freeing one entry from circular buffer because it was overwritten.");
             kfree(lost_entry); // FIXME: Will this work??
@@ -243,7 +243,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     else { // append to incomplete_write_buffer because a \n was not yet found.
         PDEBUG("Appending to incomplete_write_buffer, but not writing to circular buffer.");
         dev->incomplete_write_buffer = krealloc(dev->incomplete_write_buffer, dev->incomplete_write_buffer_size + count, GFP_KERNEL);
-        
+
         if (!dev->incomplete_write_buffer) {
             PDEBUG("Realloc didn't work for %s", dev->incomplete_write_buffer);
             kfree(dev->incomplete_write_buffer);

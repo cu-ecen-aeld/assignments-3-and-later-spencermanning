@@ -169,21 +169,23 @@ void* connection_thread(void * arg) {
     char sockbuf1byte;
     char newlinechar;
     memcpy(&newlinechar, "\n", 1);
-    ssize_t recvbyte;
+    ssize_t numrecv;
 
     // Write to /var/tmp/aesdsocketdata under protection of the mutex
     pthread_mutex_lock(&mutex);
+    // Read from the socket and write to the file
     do
     {
-        recvbyte = recv(conn_args->acceptfd, &sockbuf1byte, 1, 0); // if doesn't work, try read()
-        if (recvbyte == 0 || recvbyte == -1) {
-            syslog(LOG_ERR, "Socket recv() received an error: %i\n", (int)recvbyte);
+        numrecv = recv(conn_args->acceptfd, &sockbuf1byte, 1, 0); // if doesn't work, try read()
+        if (numrecv == 0 || numrecv == -1) {
+            syslog(LOG_ERR, "Socket recv() received an error: %i", (int)numrecv);
             perror("Recv Error");
             closeThread(conn_args, __LINE__);
         }
         // if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
         if (write(conn_args->openfd, &sockbuf1byte, 1) == -1) {
             syslog(LOG_ERR, "Write to file failed.");
+            perror("Write Error");
             closeThread(conn_args, __LINE__);
         }
         else {
@@ -203,17 +205,29 @@ void* connection_thread(void * arg) {
 
     char readbuf1byte[30] = {0}; // the sockettest.sh for asy6.1 works better with this as 30 chars
     ssize_t num_read;
-    // int fd = fileno(conn_args->file); // need to use for lseek().
+
+    // LSEEK always returns -1 with my character device. Will not work!
     // int lseekerr = lseek(conn_args->openfd, 0, SEEK_SET);
     // if (lseekerr == -1 || lseekerr) { // has to respond with 0 since I'm moving to the beginning of the file
     //     perror("lseek error");
     //     exit(1);
     // }
+
+    // /dev/aesdchar cannot use lseek() to move to the beginning of the file. So need to close and reopen the file instead
+    // to reset the file pointer to the beginning of the file.
+    close(conn_args->openfd);
+    conn_args->openfd = open("/dev/aesdchar",  O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
+    if (conn_args->openfd == -1) {
+        perror("Open failed");
+    }
+
+    // Read from the file and send it back across the socket
     do {
         // num_read = fread(&readbuf1byte, sizeof(char), 1, conn_args->file);
         num_read = read(conn_args->openfd, &readbuf1byte, 1);
         // if (feof(conn_args->file)) {
         if (num_read == 0) {
+            syslog(LOG_INFO, "End of file reached");
             break;
         }
         if (send(conn_args->acceptfd, &readbuf1byte, 1, 0) == -1) {
