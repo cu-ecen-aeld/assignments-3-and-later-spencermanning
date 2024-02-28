@@ -9,7 +9,7 @@ CFLAGS ?= -g -Wall -Werror
 
 # FIXME: Will "=" break when this is tested automatically?
 # Must be "=" and not "?=" if I want to test this manually AND HAVE DEBUG INFO COMPILED
-CC = $(CROSS_COMPILE)gcc $(CFLAGS)
+CC ?= $(CROSS_COMPILE)gcc $(CFLAGS)
 
 TARGET ?= aesdsocket
 LDFLAGS ?= -lpthread -lrt
