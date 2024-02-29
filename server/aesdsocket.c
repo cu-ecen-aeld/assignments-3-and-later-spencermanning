@@ -66,7 +66,7 @@ static void signal_handler(int signal_num) {
 
     /* Logs message to the syslog “Caught signal, exiting” when SIGINT or SIGTERM is received. */
     syslog(LOG_ERR, "Caught signal, exiting\n");
-    
+
     if (signal_num == SIGINT) { // ctrl+c
         printf("***We got a SIGINT***\n");
     }
@@ -90,8 +90,6 @@ struct Node {
 struct threadArgs {
     char ipaddr[INET_ADDRSTRLEN];
     int acceptfd;
-    // FILE *file;
-    int openfd;
     struct Node *thread_node;
 };
 
@@ -138,7 +136,7 @@ void* timer_thread(void * arg) {
         time(&rawtime);
         timeinfo = localtime(&rawtime);
         strftime(timestamp, sizeof(timestamp), "timestamp:%Y-%m-%d %H:%M:%S\n", timeinfo);
-        
+
         fwrite(&timestamp, sizeof(char), 30, file);
         pthread_mutex_lock(&mutex);
         fflush(file); // push the data to the file
@@ -152,17 +150,17 @@ void* timer_thread(void * arg) {
 }
 
 void* connection_thread(void * arg) {
-    
+
     // Unpack the conn_args
     struct threadArgs *conn_args = (struct threadArgs *)arg;
     syslog(LOG_DEBUG, "Connection thread started for %s\n", conn_args->ipaddr);
     // 5e. Receives data over the connection and appends to file /var/tmp/aesdsocketdata, creating this file if it doesn’t exist.
     /*
-    Your implementation should use a newline to separate data packets received.  
-    In other words a packet is considered complete when a newline character is found in the input receive stream, 
+    Your implementation should use a newline to separate data packets received.
+    In other words a packet is considered complete when a newline character is found in the input receive stream,
     and each newline should result in an append to the /var/tmp/aesdsocketdata file.
     You may assume the data stream does not include null characters (therefore can be processed using string handling functions).
-    You may assume the length of the packet will be shorter than the available heap size.  
+    You may assume the length of the packet will be shorter than the available heap size.
     In other words, as long as you handle malloc() associated failures with error messages you may discard associated over-length packets.
     */
     // char sockbuf[MAX_BUF_LEN];
@@ -170,9 +168,23 @@ void* connection_thread(void * arg) {
     char newlinechar;
     memcpy(&newlinechar, "\n", 1);
     ssize_t numrecv;
+    int openfd = 0;
 
     // Write to /var/tmp/aesdsocketdata under protection of the mutex
     pthread_mutex_lock(&mutex);
+
+#ifdef USE_AESD_CHAR_DEVICE
+    openfd = open("/dev/aesdchar",  O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
+#else
+    file = fopen("/var/tmp/aesdsocketdata", "a+");
+#endif
+
+    if (!openfd || openfd == -1) {
+        syslog(LOG_ERR, "File didn't open\n");
+        printf("File didn't open\n\n");
+        exit(1);
+    }
+
     // Read from the socket and write to the file
     do
     {
@@ -183,7 +195,7 @@ void* connection_thread(void * arg) {
             closeThread(conn_args, __LINE__);
         }
         // if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
-        if (write(conn_args->openfd, &sockbuf1byte, 1) == -1) {
+        if (write(openfd, &sockbuf1byte, 1) == -1) {
             syslog(LOG_ERR, "Write to file failed.");
             perror("Write Error");
             closeThread(conn_args, __LINE__);
@@ -194,12 +206,12 @@ void* connection_thread(void * arg) {
     } while (memcmp(&sockbuf1byte, &newlinechar, 1) != 0);
 
     // fflush(conn_args->file); // fwrite() needs to be flushed after it's called to immediately write to the file
-    fsync(conn_args->openfd); //  write() needs to be flushed after it's called to immediately write to the file
+    fsync(openfd); //  write() needs to be flushed after it's called to immediately write to the file
 
     // 5f. Returns the full content of /var/tmp/aesdsocketdata to the client as soon as the received data packet completes.
-    /* You may assume the total size of all packets sent 
-    (and therefore size of /var/tmp/aesdsocketdata) will be less than the size 
-    of the root filesystem, however you may not assume this total size of all 
+    /* You may assume the total size of all packets sent
+    (and therefore size of /var/tmp/aesdsocketdata) will be less than the size
+    of the root filesystem, however you may not assume this total size of all
     packets sent will be less than the size of the available RAM for the process heap.
     */
 
@@ -207,7 +219,7 @@ void* connection_thread(void * arg) {
     ssize_t num_read;
 
     // LSEEK always returns -1 with my character device. Will not work!
-    // int lseekerr = lseek(conn_args->openfd, 0, SEEK_SET);
+    // int lseekerr = lseek(openfd, 0, SEEK_SET);
     // if (lseekerr == -1 || lseekerr) { // has to respond with 0 since I'm moving to the beginning of the file
     //     perror("lseek error");
     //     exit(1);
@@ -215,16 +227,16 @@ void* connection_thread(void * arg) {
 
     // /dev/aesdchar cannot use lseek() to move to the beginning of the file. So need to close and reopen the file instead
     // to reset the file pointer to the beginning of the file.
-    close(conn_args->openfd);
-    conn_args->openfd = open("/dev/aesdchar",  O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
-    if (conn_args->openfd == -1) {
+    close(openfd);
+    openfd = open("/dev/aesdchar",  O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
+    if (openfd == -1) {
         perror("Open failed");
     }
 
     // Read from the file and send it back across the socket
     do {
         // num_read = fread(&readbuf1byte, sizeof(char), 1, conn_args->file);
-        num_read = read(conn_args->openfd, &readbuf1byte, 1);
+        num_read = read(openfd, &readbuf1byte, 1);
         // if (feof(conn_args->file)) {
         if (num_read == 0) {
             syslog(LOG_INFO, "End of file reached");
@@ -278,24 +290,10 @@ int main (int argc, char *argv[]) {
     remove("/var/tmp/aesdsocketdata");
 #endif
 
-    // FILE *file = NULL;
-    int openfd = 0;
-#ifdef USE_AESD_CHAR_DEVICE
-    // file = fopen("/dev/aesdchar", "a+");
-    openfd = open("/dev/aesdchar",  O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
-#else
-    file = fopen("/var/tmp/aesdsocketdata", "a+");
-#endif
-    if (!openfd || openfd == -1) {
-        syslog(LOG_ERR, "File didn't open\n");
-        printf("File didn't open\n\n");
-        exit(1);
-    }
-
     // Open logger
     openlog(NULL, 0, LOG_USER);
     syslog(LOG_DEBUG, "Start aesdsocket.c\n");
-    printf("We have started the aesdsocket\n");
+    printf("We have started the aesdsocket!\n");
 
     syslog(LOG_NOTICE, "-------- New log --------");
 
@@ -313,7 +311,7 @@ int main (int argc, char *argv[]) {
     hints.ai_family = AF_UNSPEC; // don't care if either IPv4 or IPv6
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_PASSIVE;
-    
+
     int getaddrinfoout = getaddrinfo(NULL, "9000", &hints, &servinfo);
     if (getaddrinfoout == -1) {
         exit(1);
@@ -323,7 +321,7 @@ int main (int argc, char *argv[]) {
     sockfd = socket(servinfo->ai_family, servinfo->ai_socktype, servinfo->ai_protocol);
     if (sockfd == -1) {
         syslog(LOG_ERR, "Socket connection failed\n");
-        exit(1); 
+        exit(1);
     }
 
     // Make the address able to be used again with SO_REUSEADDR
@@ -366,6 +364,7 @@ int main (int argc, char *argv[]) {
     SLIST_HEAD(ListHead, Node) head = SLIST_HEAD_INITIALIZER(head);
     SLIST_INIT(&head);
 
+    // Starts the timer thread only on the first connection
     int firsttime = 1;
 
     // 5h. Restarts accepting connections from new clients forever in a loop until SIGINT or SIGTERM is received (see below).
@@ -387,20 +386,10 @@ int main (int argc, char *argv[]) {
         printf("--- Connection Accepted.\n");
 
         if (firsttime) {
+#ifndef USE_AESD_CHAR_DEVICE
             // Allow timer thread to start
-            // pthread_mutex_unlock(&timer_pause_mutex);
-
-            // printf("Freopening file\n");
-#ifdef USE_AESD_CHAR_DEVICE
-            // freopen("/dev/aesdchar", "w+", file);
-#else
-            // freopen("/var/tmp/aesdsocketdata", "w+", file);
+            pthread_mutex_unlock(&timer_pause_mutex);
 #endif
-            if (!openfd) {
-                syslog(LOG_ERR, "File didn't freopen\n");
-                printf("File didn't freopen\n");
-                exit(1);
-            }
             firsttime = 0;
         }
 
@@ -426,14 +415,13 @@ int main (int argc, char *argv[]) {
         myNode->is_complete = false;
         myNode->thread_id = 0;
 
-        // Set up and malloc the args to pass in to the thread. 
+        // Set up and malloc the args to pass in to the thread.
         struct threadArgs *args;
         args = (struct threadArgs *)malloc(sizeof(struct threadArgs));
 
         // Fill in the args with the current context
         strncpy(args->ipaddr, ipaddr, INET_ADDRSTRLEN);
         args->acceptfd = acceptfd;
-        args->openfd = openfd;
         args->thread_node = myNode;
 
         if (pthread_create(&myNode->thread_id, NULL, connection_thread, args) != 0) {
@@ -467,14 +455,14 @@ int main (int argc, char *argv[]) {
         current_node = next_node; // Move to the next node
     }
 
-    /* 5i. Gracefully exits when SIGINT or SIGTERM is received, 
-    completing any open connection operations, 
-    closing any open sockets, 
+    /* 5i. Gracefully exits when SIGINT or SIGTERM is received,
+    completing any open connection operations,
+    closing any open sockets,
     and deleting the file /var/tmp/aesdsocketdata.
     */
     printf("Caught signal, exiting\n");
     // fclose(file);
-    close(openfd);
+    // close(openfd);
     free(myNode);
     close_all_things();
 
