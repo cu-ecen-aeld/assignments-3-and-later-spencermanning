@@ -35,6 +35,7 @@ struct aesd_dev
     struct aesd_circular_buffer circ_buffer;
     char *incomplete_write_buffer;
     size_t incomplete_write_buffer_size;
+    size_t buff_size;
 };
 
 

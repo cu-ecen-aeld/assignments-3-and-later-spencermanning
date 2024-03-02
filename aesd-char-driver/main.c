@@ -18,6 +18,8 @@
 #include <linux/fs.h> // file_operations. For MKDEV()
 #include <linux/slab.h> // for kfree()
 #include "aesdchar.h"
+#include "aesd_ioctl.h" // for asy9
+
 int aesd_major =   0; // use dynamic major
 int aesd_minor =   0;
 
@@ -145,6 +147,7 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     char *temp_write_data = kmalloc(count+1, GFP_KERNEL);
     // char *temp_write_data = kmalloc(count, GFP_KERNEL);
     struct aesd_buffer_entry new_entry;
+    size_t lost_size = 0;
 
     // Have to put this after kmalloc to satisfy the compiler.
     // This is to account for the null terminator.
@@ -227,10 +230,13 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
         }
 
         PDEBUG("Adding entry to circular buffer");
-        lost_entry = aesd_circular_buffer_add_entry(&dev->circ_buffer, &new_entry);
+        lost_entry = aesd_circular_buffer_add_entry(&dev->circ_buffer, &new_entry, &lost_size);
+
+        dev->buff_size += new_entry.size;
 
         if (lost_entry) {
             PDEBUG("Freeing one entry from circular buffer because it was overwritten.");
+            dev->buff_size -= lost_size; // FIXME: Will this work??
             kfree(lost_entry); // FIXME: Will this work??
             lost_entry = NULL;
         }

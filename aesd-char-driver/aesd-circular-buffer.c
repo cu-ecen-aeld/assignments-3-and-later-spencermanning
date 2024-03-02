@@ -74,7 +74,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             }
         }
     }
-    
+
     // Scenario C or Scenario D (same situation as far as looping goes)
     if ((buffer->out_offs > buffer->in_offs) || // Scenario C
         (buffer->out_offs == buffer->in_offs && buffer->full)) { // Scenario D
@@ -117,7 +117,7 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
             }
             PDEBUG("entries_checked: %i\n", entries_checked);
             PDEBUG("Checking index %i\n", index);
-            
+
             // check current index
             char_offset_signed -= buffer->entry[index].size;
             if (char_offset_signed < 0) {
@@ -144,16 +144,17 @@ struct aesd_buffer_entry *aesd_circular_buffer_find_entry_offset_for_fpos(struct
 * new start location.
 * Any necessary locking must be handled by the caller
 * Any memory referenced in @param add_entry must be allocated by and/or must have a lifetime managed by the caller.
+* NOTE: I had to add size_t lost_size to be able to subtract it from the full circular buffer size in the calling function in aesd-char-driver
 * @return NULL or buffptr, depending if the out_offs entry was overwritten.
 */
-const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry)
+const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, const struct aesd_buffer_entry *add_entry, size_t *lost_size)
 {
     /**
     * TODO: implement per description
     */
     const char * lost_entry_buffptr = NULL;
     PDEBUG("add_entry: %s with size: %zu at in_offs: %i and out_offs: %i\n", (char*)add_entry->buffptr, add_entry->size, buffer->in_offs, buffer->out_offs);
-    
+
     // PDEBUG("size: %zu\n", add_entry->size);
     // for (int i = 0; i < AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED; i++) {
     //     PDEBUG("buff[%i]: %s\n", i, (char*)buffer->entry[i].buffptr);
@@ -166,6 +167,7 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
 
         // Save buffptr to entry about to be overwritten before it is overwritten
         lost_entry_buffptr = buffer->entry[buffer->out_offs].buffptr;
+        *lost_size = buffer->entry[buffer->out_offs].size; // added for asy9
 
         // Advance output offset. Previous data is lost.
         buffer->out_offs++;
@@ -174,13 +176,13 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
         // Add the input value to the buffer
         memcpy(&buffer->entry[buffer->in_offs], add_entry, sizeof(*add_entry));
         // memcpy(&buffer->entry[buffer->in_offs], add_entry, add_entry->size);
-        
+
         // Advance input offset
         buffer->in_offs++;
         buffer->in_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
 
         // TODO: Return either null or the pointer to the entry in the buffer that was overwritten
-        // Need to return the overwritten buffer pointer because it was previously alloc'd and needs 
+        // Need to return the overwritten buffer pointer because it was previously alloc'd and needs
         // to now be freed in the caller.
         return lost_entry_buffptr;
     }
@@ -188,11 +190,11 @@ const char *aesd_circular_buffer_add_entry(struct aesd_circular_buffer *buffer, 
         // Add the input value to the buffer
         memcpy(&buffer->entry[buffer->in_offs], add_entry, sizeof(*add_entry));
         // memcpy(&buffer->entry[buffer->in_offs], add_entry, add_entry->size);
-        
+
         // Advance input offset
         buffer->in_offs++;
         buffer->in_offs %= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED;
-        
+
         // if buffer just got full
         if (buffer->in_offs == buffer->out_offs) {
                 buffer->full = true;
