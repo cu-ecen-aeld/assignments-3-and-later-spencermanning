@@ -262,12 +262,123 @@ ssize_t aesd_write(struct file *filp, const char __user *buf, size_t count,
     *f_pos += retval;
     return retval;
 }
+
+/**
+ * @brief Implements the llseek function for the AESD char driver.
+ * @param file -   File structure to seek within
+ * @param offset - File offset to seek to
+ * @param whence - Type of seek (SEEK_SET, SEEK_CUR, SEEK_END)
+ * @return loff_t - The new file offset after the seek operation
+ */
+loff_t aesd_llseek(struct file *file, loff_t offset, int whence)
+{
+	loff_t retval;
+	struct aesd_dev *dev = file->private_data;
+
+	// Lock the mutex, but it can be interrupted
+	if (mutex_lock_interruptible(&aesd_device.lock)) {
+		return -ERESTARTSYS;
+	}
+
+    // Seek
+	retval = fixed_size_llseek(file, offset, whence, dev->buff_size);
+	if (retval < 0) {
+        PDEBUG("Error in fixed_size_llseek(): %lld\n", retval);
+	}
+
+	mutex_unlock(&aesd_device.lock);
+	return retval;
+}
+
+/**
+ * Adjust the file offset (f_pos) parameter in @param filp based on the location specified by
+ * @param write_cmd (referenced command to locate) and @param write_cmd_offset (the zero-referenced offset into the command).
+ * @return 0 if successful, negative value if error occurred:
+ * - ERESTARTSYS if mutex could not be obtained
+ * - EINVAL if write_cmd or write_cmd_offset was out of range
+ */
+static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, unsigned int write_cmd_offset)
+{
+	struct aesd_dev *dev = filp->private_data;
+	loff_t updated_fpos_offset = 0;
+
+	// Lock the mutex, but it can be interrupted
+	if (mutex_lock_interruptible(&aesd_device.lock)) {
+		return -ERESTARTSYS;
+	}
+
+	// Check for valid write_cmd and write_cmd_offset
+	if (write_cmd >= AESDCHAR_MAX_WRITE_OPERATIONS_SUPPORTED || write_cmd_offset >= dev->circ_buffer.entry[write_cmd].size) {
+		mutex_unlock(&aesd_device.lock);
+	    return -EINVAL;
+	}
+
+    uint32_t i;
+	// Calculate the updated file position offset
+	for (i = 0; i < write_cmd; i++) {
+		updated_fpos_offset += dev->circ_buffer.entry[i].size;
+	}
+
+	// Update the file pointer to the new offset
+	filp->f_pos = updated_fpos_offset + write_cmd_offset;
+
+	mutex_unlock(&aesd_device.lock);
+	return 0;
+}
+
+/**
+ * @brief The ioctl function for the AESD char driver for AESDCHAR_IOCSEEKTO
+ * @param filp - Pointer to the file structure.
+ * @param cmd - The ioctl command
+ * @param arg - User-space struct pointer to be copied to kernel
+ * @return Returns 0 on success or negative on failure:
+ */
+long aesd_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	long retval = 0;
+	struct aesd_seekto seekto;
+
+	// Check the ioctl command type and number
+	if (_IOC_TYPE(cmd) != AESD_IOC_MAGIC) return -ENOTTY;
+	if (_IOC_NR(cmd) > AESDCHAR_IOC_MAXNR) return -ENOTTY;
+
+	switch (cmd)
+	{
+		case AESDCHAR_IOCSEEKTO:
+			// Copy the seekto structure from user space to kernel space
+			if (copy_from_user(&seekto, (const void __user *)arg, sizeof(seekto)) != 0) {
+				retval = -EFAULT;
+			}
+			else {
+				// Do the file offset adjustment
+				retval = aesd_adjust_file_offset(filp, seekto.write_cmd, seekto.write_cmd_offset);
+
+				if (retval == -EINVAL) {
+				    PDEBUG("aesd_adjust_file_offset failed with out of range error.\n");
+				}
+                else if (retval == -ERESTARTSYS) {
+                    PDEBUG("aesd_adjust_file_offset failed to obtain mutex.\n");
+                }
+			}
+			break;
+
+		default:
+			retval = -ENOTTY; /* redundant, as cmd was checked against MAXNR */
+			break;
+	}
+
+	return retval;
+}
+
+
 struct file_operations aesd_fops = {
     .owner =    THIS_MODULE,
     .read =     aesd_read,
     .write =    aesd_write,
     .open =     aesd_open,
     .release =  aesd_release,
+    .llseek =   aesd_llseek,
+    .unlocked_ioctl = aesd_ioctl,
 };
 
 static int aesd_setup_cdev(struct aesd_dev *dev)
