@@ -215,7 +215,7 @@ void* connection_thread(void * arg) {
         }
     }
     else {
-        // Do the normal stuff ie write to the file
+        // Write to the file
         // if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
         if (write(openfd, &sockbuffull, numrecv) == -1) {
             syslog(LOG_ERR, "Write to file failed.");
@@ -226,6 +226,10 @@ void* connection_thread(void * arg) {
 
         // fflush(conn_args->file); // fwrite() needs to be flushed after it's called to immediately write to the file
         fsync(openfd); //  write() needs to be flushed after it's called to immediately write to the file
+
+        // In a normal write, can move file position to the beginning since not calling ioctl
+        off_t current_position = lseek(openfd, 0, SEEK_SET);
+        syslog(LOG_INFO, "Moved file position to the beginning: %lld\n", (long long) current_position);
     }
 
     // 5f. Returns the full content of /var/tmp/aesdsocketdata to the client as soon as the received data packet completes.
@@ -261,8 +265,7 @@ void* connection_thread(void * arg) {
 
     // Read from the full file (based off current file pointer position)
     syslog(LOG_INFO, "Start read");
-    off_t current_position = lseek(openfd, 0, SEEK_SET);
-    current_position = lseek(openfd, 0, SEEK_CUR);
+    off_t current_position = lseek(openfd, 0, SEEK_CUR);
     if (current_position == (off_t) -1) {
         perror("lseek error");
         exit(1);
@@ -278,7 +281,6 @@ void* connection_thread(void * arg) {
             syslog(LOG_INFO, "End of file reached");
             break;
         }
-        syslog(LOG_INFO, "Read from file: %c\n", readbuf[i]);
         total_read += num_read;
         i++;
     } while (num_read > 0);
