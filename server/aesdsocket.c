@@ -27,6 +27,9 @@
 #define USE_AESD_CHAR_DEVICE 1
 #endif
 
+// Assignment 9
+#include "../aesd-char-driver/aesd_ioctl.h"
+
 // const struct {
 //     sa_family_t sa_family;
 //     char        sa_data[14];
@@ -46,6 +49,8 @@
 volatile int received_exit_signal = 0;
 struct addrinfo *servinfo; // res
 int sockfd;
+
+const char *ioctl_str = "AESDCHAR_IOCSEEKTO:";
 
 void close_all_things() {
 // Asy8: "Ensure you do not remove the  /dev/aesdchar endpoint after exiting the aesdsocket application."
@@ -185,25 +190,41 @@ void* connection_thread(void * arg) {
         exit(1);
     }
 
-    // Read from the socket and write to the file
-    do
-    {
-        numrecv = recv(conn_args->acceptfd, &sockbuf1byte, 1, 0); // if doesn't work, try read()
-        if (numrecv == 0 || numrecv == -1) {
-            syslog(LOG_ERR, "Socket recv() received an error: %i", (int)numrecv);
-            perror("Recv Error");
-            closeThread(conn_args, __LINE__);
+    if (strncmp(sockbuffull, ioctl_str, strlen(ioctl_str)) == 0) {
+        syslog(LOG_INFO, "Received ioctl string");
+
+        struct aesd_seekto aesd_seekto_data;
+        sscanf(sockbuffull, "AESDCHAR_IOCSEEKTO:%d,%d", &aesd_seekto_data.write_cmd, &aesd_seekto_data.write_cmd_offset);
+
+        if(ioctl(openfd, AESDCHAR_IOCSEEKTO, &aesd_seekto_data) != 0) {
+            perror("ioctl() failed");
+            syslog(LOG_ERR,"ioctl() failed");
         }
-        // if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
-        if (write(openfd, &sockbuf1byte, 1) == -1) {
-            syslog(LOG_ERR, "Write to file failed.");
-            perror("Write Error");
-            closeThread(conn_args, __LINE__);
-        }
-        else {
-            printf("%c",sockbuf1byte);
-        }
-    } while (memcmp(&sockbuf1byte, &newlinechar, 1) != 0);
+    }
+    else {
+        // Do the normal stuff ie write to the file
+        int i = 0;
+        do
+        {
+            // Before Asy9, I read one byte at a time here
+            // numrecv = recv(conn_args->acceptfd, &sockbuf1byte, 1, 0); // if doesn't work, try read()
+            // if (numrecv == 0 || numrecv == -1) {
+            //     syslog(LOG_ERR, "Socket recv() received an error: %i", (int)numrecv);
+            //     perror("Recv Error");
+            //     closeThread(conn_args, __LINE__);
+            // }
+
+            // if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
+            if (write(openfd, &sockbuffull[i], 1) == -1) {
+                syslog(LOG_ERR, "Write to file failed.");
+                perror("Write Error");
+                closeThread(conn_args, __LINE__);
+            }
+            else {
+                printf("%c",sockbuffull[i]);
+            }
+        } while (memcmp(&sockbuffull[i++], &newlinechar, 1) != 0);
+    }
 
     // fflush(conn_args->file); // fwrite() needs to be flushed after it's called to immediately write to the file
     fsync(openfd); //  write() needs to be flushed after it's called to immediately write to the file
