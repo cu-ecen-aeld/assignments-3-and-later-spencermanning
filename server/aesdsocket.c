@@ -170,6 +170,7 @@ void* connection_thread(void * arg) {
     */
     // char sockbuf[MAX_BUF_LEN];
     char sockbuf1byte;
+    char sockbuffull[1024]; // 1024 is the max size of the buffer
     char newlinechar;
     memcpy(&newlinechar, "\n", 1);
     ssize_t numrecv;
@@ -177,6 +178,14 @@ void* connection_thread(void * arg) {
 
     // Write to /var/tmp/aesdsocketdata under protection of the mutex
     pthread_mutex_lock(&mutex);
+
+    // Try receiving all at once to handle when receving AESDCHAR_IOCSEEKTO string
+    numrecv = recv(conn_args->acceptfd, sockbuffull, 1024, 0);
+    if (numrecv == 0 || numrecv == -1) {
+        syslog(LOG_ERR, "Socket recv() received an error: %i", (int)numrecv);
+        perror("Recv Error");
+        closeThread(conn_args, __LINE__);
+    }
 
 #ifdef USE_AESD_CHAR_DEVICE
     openfd = open("/dev/aesdchar",  O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
