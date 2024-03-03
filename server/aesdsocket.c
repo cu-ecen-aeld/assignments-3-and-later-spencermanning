@@ -169,7 +169,6 @@ void* connection_thread(void * arg) {
     In other words, as long as you handle malloc() associated failures with error messages you may discard associated over-length packets.
     */
     // char sockbuf[MAX_BUF_LEN];
-    char sockbuf1byte;
     char sockbuffull[1024]; // 1024 is the max size of the buffer
     char newlinechar;
     memcpy(&newlinechar, "\n", 1);
@@ -186,6 +185,9 @@ void* connection_thread(void * arg) {
         perror("Recv Error");
         closeThread(conn_args, __LINE__);
     }
+    // sockbuffull[numrecv] = '\0'; // null terminate the string
+    // numrecv += 1;
+    syslog(LOG_INFO, "Received data: %s", sockbuffull);
 
 #ifdef USE_AESD_CHAR_DEVICE
     openfd = open("/dev/aesdchar",  O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
@@ -199,6 +201,7 @@ void* connection_thread(void * arg) {
         exit(1);
     }
 
+    // Received "AESDCHAR_IOCSEEKTO:X,Y"
     if (strncmp(sockbuffull, ioctl_str, strlen(ioctl_str)) == 0) {
         syslog(LOG_INFO, "Received ioctl string");
 
@@ -207,36 +210,23 @@ void* connection_thread(void * arg) {
 
         if(ioctl(openfd, AESDCHAR_IOCSEEKTO, &aesd_seekto_data) != 0) {
             perror("ioctl() failed");
-            syslog(LOG_ERR,"ioctl() failed");
+            syslog(LOG_ERR, "ioctl() failed");
+            exit(1);
         }
     }
     else {
         // Do the normal stuff ie write to the file
-        int i = 0;
-        do
-        {
-            // Before Asy9, I read one byte at a time here
-            // numrecv = recv(conn_args->acceptfd, &sockbuf1byte, 1, 0); // if doesn't work, try read()
-            // if (numrecv == 0 || numrecv == -1) {
-            //     syslog(LOG_ERR, "Socket recv() received an error: %i", (int)numrecv);
-            //     perror("Recv Error");
-            //     closeThread(conn_args, __LINE__);
-            // }
+        // if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
+        if (write(openfd, &sockbuffull, numrecv) == -1) {
+            syslog(LOG_ERR, "Write to file failed.");
+            perror("Write Error");
+            closeThread(conn_args, __LINE__);
+        }
+        syslog(LOG_INFO, "Wrote to file: %s", sockbuffull);
 
-            // if (fwrite(&sockbuf1byte, sizeof(char), 1, conn_args->file) == 0) {
-            if (write(openfd, &sockbuffull[i], 1) == -1) {
-                syslog(LOG_ERR, "Write to file failed.");
-                perror("Write Error");
-                closeThread(conn_args, __LINE__);
-            }
-            else {
-                printf("%c",sockbuffull[i]);
-            }
-        } while (memcmp(&sockbuffull[i++], &newlinechar, 1) != 0);
+        // fflush(conn_args->file); // fwrite() needs to be flushed after it's called to immediately write to the file
+        fsync(openfd); //  write() needs to be flushed after it's called to immediately write to the file
     }
-
-    // fflush(conn_args->file); // fwrite() needs to be flushed after it's called to immediately write to the file
-    fsync(openfd); //  write() needs to be flushed after it's called to immediately write to the file
 
     // 5f. Returns the full content of /var/tmp/aesdsocketdata to the client as soon as the received data packet completes.
     /* You may assume the total size of all packets sent
@@ -245,8 +235,10 @@ void* connection_thread(void * arg) {
     packets sent will be less than the size of the available RAM for the process heap.
     */
 
-    char readbuf1byte[30] = {0}; // the sockettest.sh for asy6.1 works better with this as 30 chars
+    char readbuf[100] = {0}; // the sockettest.sh for asy6.1 works better with this as 30 chars
     ssize_t num_read;
+    ssize_t total_read = 0;
+    int i = 0;
 
     // LSEEK always returns -1 with my character device. Will not work!
     // int lseekerr = lseek(openfd, 0, SEEK_SET);
@@ -257,26 +249,47 @@ void* connection_thread(void * arg) {
 
     // /dev/aesdchar cannot use lseek() to move to the beginning of the file. So need to close and reopen the file instead
     // to reset the file pointer to the beginning of the file.
-    close(openfd);
-    openfd = open("/dev/aesdchar",  O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
-    if (openfd == -1) {
-        perror("Open failed");
+    // FIXME: Asy9 says I can't do this
+    // close(openfd);
+    // syslog(LOG_INFO, "_______________Closed file: %i", openfd);
+    // openfd = open("/dev/aesdchar", O_RDWR | O_CREAT | O_APPEND, S_IWUSR | S_IRUSR | S_IWGRP | S_IRGRP | S_IROTH);
+    // if (openfd == -1)
+    // {
+    //     perror("Open failed");
+    // }
+    // syslog(LOG_INFO, "_______________Opened file: %i", openfd);
+
+    // Read from the full file (based off current file pointer position)
+    syslog(LOG_INFO, "Start read");
+    off_t current_position = lseek(openfd, 0, SEEK_SET);
+    current_position = lseek(openfd, 0, SEEK_CUR);
+    if (current_position == (off_t) -1) {
+        perror("lseek error");
+        exit(1);
+    } else {
+        syslog(LOG_INFO, "The current file position is %lld\n", (long long) current_position);
     }
 
-    // Read from the file and send it back across the socket
     do {
-        // num_read = fread(&readbuf1byte, sizeof(char), 1, conn_args->file);
-        num_read = read(openfd, &readbuf1byte, 1);
+        // num_read = fread(&readbuf, sizeof(char), 1, conn_args->file);
+        num_read = read(openfd, &readbuf[i], 1);
         // if (feof(conn_args->file)) {
         if (num_read == 0) {
             syslog(LOG_INFO, "End of file reached");
             break;
         }
-        if (send(conn_args->acceptfd, &readbuf1byte, 1, 0) == -1) {
-            syslog(LOG_ERR, "Send failed");
-            closeThread(conn_args, __LINE__);
-        }
+        syslog(LOG_INFO, "Read from file: %c\n", readbuf[i]);
+        total_read += num_read;
+        i++;
     } while (num_read > 0);
+
+    // Send the data back across the socket
+    if (send(conn_args->acceptfd, readbuf, total_read, 0) == -1) {
+        syslog(LOG_ERR, "Send failed");
+        closeThread(conn_args, __LINE__);
+    }
+    syslog(LOG_INFO, "Sent back to socket: %s", readbuf);
+
     pthread_mutex_unlock(&mutex); // Don't put mutex functions in do-while loops
 
     closeThread(conn_args, __LINE__);

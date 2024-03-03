@@ -53,9 +53,7 @@
             "request": "launch",
             "name": "sockettest.sh",
             "cwd": "${workspaceFolder}",
-            // Does the assignment actually say we need to test with asy5?
-            // "program": "${workspaceFolder}/assignment-autotest/test/assignment5/sockettest.sh",
-            "program": "${workspaceFolder}/assignment-autotest/test/assignment8/sockettest.sh",
+            "program": "${workspaceFolder}/assignment-autotest/test/assignment9/sockettest.sh",
             "args": [],
         },
         {
