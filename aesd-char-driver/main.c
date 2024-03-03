@@ -307,6 +307,7 @@ static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, u
 {
 	struct aesd_dev *dev = filp->private_data;
 	loff_t updated_fpos_offset = 0;
+    int i = 0;
 
 	// Lock the mutex, but it can be interrupted
 	if (mutex_lock_interruptible(&aesd_device.lock)) {
@@ -319,7 +320,6 @@ static long aesd_adjust_file_offset(struct file *filp, unsigned int write_cmd, u
 	    return -EINVAL;
 	}
 
-    uint32_t i;
 	// Calculate the updated file position offset
 	for (i = 0; i < write_cmd; i++) {
 		updated_fpos_offset += dev->circ_buffer.entry[i].size;
